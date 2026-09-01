@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+
+{% block title %}编辑邮件模板 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-end align-items-center mb-4">
+        <a href="{{ url_for('backup.templates') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>返回模板列表
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- 编辑表单 -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-file-alt me-2"></i>{{ template.name }}
+                            {% if template.is_builtin %}
+                                <span class="badge bg-secondary ms-2">内置模板</span>
+                            {% endif %}
+                        </h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {% if template.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="is_active">启用模板</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('backup.edit_template', template_id=template.id) }}" method="POST" id="templateForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="mb-3">
+                            <label for="name" class="form-label">模板名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-lg" id="name" name="name"
+                                   value="{{ template.name }}" required maxlength="100">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">模板描述</label>
+                            <input type="text" class="form-control" id="description" name="description"
+                                   value="{{ template.description or '' }}" maxlength="255"
+                                   placeholder="简单描述这个模板的用途">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="subject" class="form-label">邮件主题 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="subject" name="subject"
+                                   value="{{ template.subject }}" required maxlength="200">
+                            <div class="form-text">可以使用变量，例如：<code>【{system_name}】备份通知 - {date}</code></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="body" class="form-label">邮件正文 <span class="text-danger">*</span></label>
+                            <textarea class="form-control font-monospace" id="body" name="body" rows="20" required>{{ template.body }}</textarea>
+                            <div class="form-text">
+                                支持变量替换。点击右侧"插入变量"按钮可快速插入常用变量
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-outline-info" onclick="previewEdit()">
+                                <i class="fas fa-eye me-1"></i>预览渲染效果
+                            </button>
+                            <div>
+                                <a href="{{ url_for('backup.templates') }}" class="btn btn-outline-secondary me-2">取消</a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-1"></i>保存修改
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 变量插入面板 -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-light">
+                    <i class="fas fa-magic me-2"></i>快速插入变量
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6 class="text-primary small">时间</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{date}')">{date}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{time}')">{time}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{datetime}')">{datetime}</button>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="text-primary small">备份信息</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{filename}')">{filename}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{file_size}')">{file_size}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{backup_type}')">{backup_type}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{trigger_type}')">{trigger_type}</button>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="text-primary small">统计信息</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{total_count}')">{total_count}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{success_count}')">{success_count}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{failed_count}')">{failed_count}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{email_sent_count}')">{email_sent_count}</button>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="text-primary small">其他</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{system_name}')">{system_name}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{user_name}')">{user_name}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{last_backup_time}')">{last_backup_time}</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertVariable('{last_backup_status}')">{last_backup_status}</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light">
+                    <i class="fas fa-question-circle me-2"></i>使用提示
+                </div>
+                <div class="card-body small">
+                    <ul class="mb-0 ps-3">
+                        <li>变量用 <code>{变量名}</code> 格式</li>
+                        <li>支持中文和特殊字符</li>
+                        <li>空行会被保留</li>
+                        <li>可使用 ASCII 艺术装饰</li>
+                        <li>编辑后建议先预览</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 预览模态框 -->
+<div class="modal fade" id="previewEditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-magic me-2"></i>渲染预览</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="text-muted">邮件主题：</h6>
+                <div class="bg-light p-3 rounded mb-3" id="editSubject"></div>
+                <h6 class="text-muted">邮件正文：</h6>
+                <pre class="bg-light p-3 rounded mb-0" id="editBody" style="white-space: pre-wrap; font-family: inherit;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 在光标位置插入变量
+function insertVariable(variable) {
+    const textarea = document.getElementById('body');
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    textarea.value = text.substring(0, start) + variable + text.substring(end);
+    textarea.focus();
+    textarea.selectionStart = textarea.selectionEnd = start + variable.length;
+}
+
+// 预览当前编辑内容
+function previewEdit() {
+    const subject = document.getElementById('subject').value;
+    const body = document.getElementById('body').value;
+
+    // 客户端简单变量替换预览
+    const sampleVars = {
+        '{date}': '2026-06-18',
+        '{time}': '14:30:00',
+        '{datetime}': '2026-06-18 14:30:00',
+        '{filename}': 'inventory_backup_20260618_143000.zip',
+        '{file_size}': '512.00 KB',
+        '{backup_type}': '手动备份',
+        '{trigger_type}': '手动触发',
+        '{total_count}': '25',
+        '{success_count}': '24',
+        '{failed_count}': '1',
+        '{email_sent_count}': '24',
+        '{system_name}': '进销存管理系统',
+        '{user_name}': '管理员',
+        '{last_backup_time}': '2026-06-17 10:45:00',
+        '{last_backup_status}': '成功',
+        '{send_time}': '2026-06-18 14:30:00',
+        '{year}': '2026',
+        '{month}': '06',
+        '{day}': '18'
+    };
+
+    let renderedSubject = subject;
+    let renderedBody = body;
+    for (const [key, value] of Object.entries(sampleVars)) {
+        renderedSubject = renderedSubject.split(key).join(value);
+        renderedBody = renderedBody.split(key).join(value);
+    }
+
+    document.getElementById('editSubject').textContent = renderedSubject;
+    document.getElementById('editBody').textContent = renderedBody;
+    new bootstrap.Modal(document.getElementById('previewEditModal')).show();
+}
+</script>
+{% endblock %}

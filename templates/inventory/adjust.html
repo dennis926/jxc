@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}库存盘点 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('inventory.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回库存列表
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-edit me-2"></i>库存调整</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" id="adjustForm">
+            <div class="row g-3">
+                <!-- 选择仓库 -->
+                <div class="col-md-6">
+                    <label for="warehouse_id" class="form-label">选择仓库 <span class="text-danger">*</span></label>
+                    <select name="warehouse_id" id="warehouse_id" class="form-select" required>
+                        <option value="">请选择仓库</option>
+                        {% for w in warehouses %}
+                        <option value="{{ w.id }}">{{ w.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- 选择商品 -->
+                <div class="col-md-6">
+                    <label for="product_id" class="form-label">选择商品 <span class="text-danger">*</span></label>
+                    <select name="product_id" id="product_id" class="form-select" required>
+                        <option value="">请选择商品</option>
+                        {% for p in products %}
+                        <option value="{{ p.id }}" data-sku="{{ p.sku }}">{{ p.name }} ({{ p.sku }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- 当前库存显示 -->
+                <div class="col-12">
+                    <div class="alert alert-info" id="currentStockInfo" style="display: none;">
+                        <i class="fas fa-info-circle me-2"></i>
+                        当前库存：<strong id="currentStock">-</strong>
+                    </div>
+                </div>
+
+                <!-- 新库存数量 -->
+                <div class="col-md-6">
+                    <label for="new_quantity" class="form-label">新库存数量 <span class="text-danger">*</span></label>
+                    <input type="number" name="new_quantity" id="new_quantity" class="form-control" min="0" required placeholder="请输入盘点后的实际库存数量">
+                    <div class="form-text">请输入盘点后的实际库存数量</div>
+                </div>
+
+                <!-- 调整原因 -->
+                <div class="col-md-6">
+                    <label for="reason" class="form-label">调整原因</label>
+                    <input type="text" name="reason" id="reason" class="form-control" placeholder="请输入调整原因（如：盘点差异、损耗等）">
+                </div>
+
+                <!-- 提交按钮 -->
+                <div class="col-12">
+                    <hr>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>确认调整
+                    </button>
+                    <a href="{{ url_for('inventory.list') }}" class="btn btn-outline-secondary">取消</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 盘点说明 -->
+<div class="card shadow mt-4">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>盘点说明</h6>
+    </div>
+    <div class="card-body">
+        <ul class="mb-0">
+            <li>库存盘点用于修正实际库存与系统库存的差异</li>
+            <li>调整后会自动生成一条"盘点调整"类型的出入库记录</li>
+            <li>请确保盘点数据准确后再提交</li>
+            <li>建议在盘点前备份数据或记录原始库存</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const warehouseSelect = document.getElementById('warehouse_id');
+    const productSelect = document.getElementById('product_id');
+    const currentStockInfo = document.getElementById('currentStockInfo');
+    const currentStockSpan = document.getElementById('currentStock');
+
+    // 当仓库或商品选择变化时，获取当前库存
+    function updateCurrentStock() {
+        const warehouseId = warehouseSelect.value;
+        const productId = productSelect.value;
+
+        if (warehouseId && productId) {
+            // 通过AJAX获取当前库存
+            fetch(`/api/inventory/check?warehouse_id=${warehouseId}&product_id=${productId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        currentStockSpan.textContent = data.quantity;
+                        currentStockInfo.style.display = 'block';
+                    } else {
+                        currentStockSpan.textContent = '0（无库存记录）';
+                        currentStockInfo.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('获取库存失败:', error);
+                    currentStockInfo.style.display = 'none';
+                });
+        } else {
+            currentStockInfo.style.display = 'none';
+        }
+    }
+
+    warehouseSelect.addEventListener('change', updateCurrentStock);
+    productSelect.addEventListener('change', updateCurrentStock);
+});
+</script>
+{% endblock %}

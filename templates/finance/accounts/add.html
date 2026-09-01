@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}添加账户 - 财务模块 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('finance.accounts') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form id="accountForm" method="POST">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">账户名称 <span class="text-danger">*</span></label>
+                    <input type="text" name="name" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">账户编码</label>
+                    <input type="text" name="code" class="form-control" placeholder="如: CASH001">
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">账户类型 <span class="text-danger">*</span></label>
+                    <select name="type" class="form-select" required>
+                        <option value="bank">银行账户</option>
+                        <option value="cash">现金</option>
+                        <option value="card">信用卡</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">账号</label>
+                    <input type="text" name="account_no" class="form-control" placeholder="银行账号或编号">
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">期初余额</label>
+                    <input type="number" name="opening_balance" class="form-control" step="0.01" value="0" placeholder="账户开立时的余额">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">备注</label>
+                <textarea name="remark" class="form-control" rows="3"></textarea>
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>保存
+                </button>
+                <a href="{{ url_for('finance.accounts') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#accountForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        $.ajax({
+            url: '{{ url_for("finance.add_account") }}',
+            method: 'POST',
+            data: $(this).serialize(),
+            success: function(res) {
+                if (res.success) {
+                    alert('添加成功');
+                    window.location.href = '{{ url_for("finance.accounts") }}';
+                } else {
+                    alert('添加失败：' + res.message);
+                }
+            },
+            error: function() {
+                alert('添加失败');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

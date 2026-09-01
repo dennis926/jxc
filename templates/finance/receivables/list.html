@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}应收款管理 - 财务模块 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <div>
+        <button class="btn btn-primary" onclick="printReceivables()">
+            <i class="fas fa-print me-1"></i>打印
+        </button>
+        <a href="{{ url_for('finance.export_receivables', status=status, customer_name=customer_name, start_date=start_date, end_date=end_date) }}" class="btn btn-info text-white">
+            <i class="fas fa-file-excel me-1"></i>导出Excel
+        </a>
+    </div>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h6 class="card-title">应收总额</h6>
+                <h3 class="mb-0">¥{{ total_amount }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h6 class="card-title">已收金额</h6>
+                <h3 class="mb-0">¥{{ total_amount - total_pending }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <h6 class="card-title">待收金额</h6>
+                <h3 class="mb-0">¥{{ total_pending }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 筛选条件 -->
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-2">
+                <select name="status" class="form-select">
+                    <option value="">全部状态</option>
+                    <option value="pending" {% if status == 'pending' %}selected{% endif %}>待收款</option>
+                    <option value="partial" {% if status == 'partial' %}selected{% endif %}>部分收款</option>
+                    <option value="received" {% if status == 'received' %}selected{% endif %}>已收清</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <input type="text" name="customer_name" class="form-control" placeholder="客户名称/地址..." value="{{ customer_name }}">
+            </div>
+            <div class="col-md-2">
+                <input type="date" name="start_date" class="form-control" value="{{ start_date }}" title="开始日期"
+                       onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+            </div>
+            <div class="col-md-2">
+                <input type="date" name="end_date" class="form-control" value="{{ end_date }}" title="结束日期"
+                       onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-outline-primary">
+                    <i class="fas fa-search me-1"></i>筛选
+                </button>
+                <a href="{{ url_for('finance.receivables') }}" class="btn btn-outline-secondary">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 应收款列表 -->
+<div class="card shadow">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>单号</th>
+                        <th>客户名称</th>
+                        <th>收货地址</th>
+                        <th>应收金额</th>
+                        <th>已收金额</th>
+                        <th>待收金额</th>
+                        <th>到期日</th>
+                        <th>状态</th>
+                        <th>关联单号</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ar in receivables %}
+                    <tr>
+                        <td><code>{{ ar.transaction_no }}</code></td>
+                        <td>{{ ar.customer_name }}</td>
+                        <td>{{ ar.customer_address or '-' }}</td>
+                        <td><strong>¥{{ ar.amount }}</strong></td>
+                        <td class="text-success">¥{{ ar.paid_amount }}</td>
+                        <td class="text-warning">¥{{ ar.pending_amount }}</td>
+                        <td>{{ ar.due_date.strftime('%Y-%m-%d') if ar.due_date else '-' }}</td>
+                        <td>
+                            {% if ar.status == 'pending' %}
+                                <span class="badge bg-warning text-dark">待收款</span>
+                            {% elif ar.status == 'partial' %}
+                                <span class="badge bg-info">部分收款</span>
+                            {% elif ar.status == 'received' %}
+                                <span class="badge bg-success">已收清</span>
+                            {% else %}
+                                <span class="badge bg-secondary">已核销</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ ar.related_no or '-' }}</td>
+                        <td>
+                            {% if ar.status in ['pending', 'partial'] %}
+                                <a href="{{ url_for('finance.collect_receivable', id=ar.id) }}" class="btn btn-sm btn-success">
+                                    <i class="fas fa-dollar-sign me-1"></i>收款
+                                </a>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-3">暂无应收款记录</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if pagination.pages > 1 %}
+        <nav>
+            <ul class="pagination justify-content-center">
+                {% if pagination.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('finance.receivables', page=pagination.prev_num, status=status, customer_name=customer_name, start_date=start_date, end_date=end_date) }}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for p in pagination.iter_pages() %}
+                    {% if p %}
+                        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('finance.receivables', page=p, status=status, customer_name=customer_name, start_date=start_date, end_date=end_date) }}">{{ p }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagination.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('finance.receivables', page=pagination.next_num, status=status, customer_name=customer_name, start_date=start_date, end_date=end_date) }}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function printReceivables() {
+    const printContent = document.querySelector('.card.shadow .card-body').innerHTML;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+        <head>
+            <title>应收款管理 - ${new Date().toLocaleDateString()}</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                table { width: 100%; border-collapse: collapse; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f5f5f5; }
+                .text-success { color: #198754; }
+                .text-warning { color: #ffc107; }
+            </style>
+        </head>
+        <body>
+            <h2>应收款管理</h2>
+            ${printContent}
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+}
+</script>
+{% endblock %}

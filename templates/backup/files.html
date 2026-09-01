@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}备份文件 - 备份管理{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-end align-items-center mb-4">
+        <a href="{{ url_for('backup.index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>返回备份管理
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 fw-bold text-primary">
+                <i class="fas fa-file-archive me-2"></i>备份文件列表
+            </h6>
+            {% if backup_files %}
+            <span class="badge bg-secondary">共 {{ backup_files|length }} 个文件</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if backup_files %}
+            <div class="table-container">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>文件名</th>
+                            <th>大小</th>
+                            <th>备份时间</th>
+                            <th class="text-end">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in backup_files %}
+                        <tr>
+                            <td>
+                                <i class="fas fa-file-archive text-warning me-2"></i>
+                                <span class="fw-medium">{{ f.filename }}</span>
+                            </td>
+                            <td>{{ f.size_text }}</td>
+                            <td style="white-space: nowrap;">
+                                <small class="text-muted">{{ f.modified }}</small>
+                            </td>
+                            <td class="text-end">
+                                <a href="{{ url_for('backup.download', filename=f.filename) }}"
+                                   class="btn btn-sm btn-outline-primary"
+                                   title="下载此备份文件">
+                                    <i class="fas fa-download me-1"></i>下载
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <p class="text-muted mb-3">暂无备份文件</p>
+                <a href="{{ url_for('backup.index') }}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>创建备份
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

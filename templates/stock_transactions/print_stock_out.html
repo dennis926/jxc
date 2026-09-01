@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>出库单打印</title>
+    <style>
+        @media print {
+            body { font-size: 12px; }
+            .no-print { display: none; }
+            @page { size: A4; margin: 10mm; }
+        }
+        body {
+            font-family: "SimSun", "宋体", serif;
+            font-size: 12px;
+            margin: 0;
+            padding: 20px;
+        }
+        .report-title {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .header-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .header-info span {
+            white-space: nowrap;
+            margin-right: 20px;
+        }
+        .table-container {
+            margin-top: 10px;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        .data-table th, .data-table td {
+            border: 1px solid #000;
+            padding: 5px 3px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .data-table th {
+            font-weight: bold;
+            background-color: #f0f0f0;
+        }
+        .bottom-area {
+            margin-top: 15px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .total-info {
+            text-align: right;
+            font-size: 14px;
+        }
+        .btn-print {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            z-index: 100;
+        }
+        .btn-print:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <button class="btn-print no-print" onclick="window.print()">打印出库单</button>
+
+    <div class="report-title">{{ form_config.form_name if form_config else '出库单' }}</div>
+
+    <div class="header-info">
+        <div>
+            <span><strong>仓库:</strong> {{ warehouse_name }}</span>
+        </div>
+        <div>
+            <span><strong>日期:</strong> {{ start_date }} ~ {{ end_date }}</span>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width: 4%;">序号</th>
+                    {% for field in form_fields %}
+                    <th>{{ field.field_name }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.seq }}</td>
+                    {% for field in form_fields %}
+                    <td>{{ item[field.field_code] if item[field.field_code] is not none else '' }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                {% for i in range(10 - items|length) %}
+                <tr>
+                    <td></td>
+                    {% for field in form_fields %}
+                    <td></td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="bottom-area">
+        <div class="total-info">
+            <p><strong>合计数量:</strong> {{ total_qty }}</p>
+            <p><strong>打印时间:</strong> {{ today }}</p>
+        </div>
+    </div>
+</body>
+</html>

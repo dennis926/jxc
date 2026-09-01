@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}{{ '编辑角色' if role else '新增角色' }} - 进销存管理系统{% endblock %}
+
+{% block extra_css %}
+<style>
+.perm-module-card {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+.perm-module-header {
+    background-color: #f8f9fa;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #dee2e6;
+}
+.perm-module-header h6 {
+    margin: 0;
+    font-weight: 600;
+}
+.perm-grid {
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+}
+.perm-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+.perm-item:hover {
+    background-color: #f0f7ff;
+}
+.perm-item label {
+    margin: 0;
+    cursor: pointer;
+    font-size: 0.9rem;
+    user-select: none;
+}
+.perm-item .form-check-input {
+    margin-right: 8px;
+}
+.perm-item .perm-desc {
+    display: block;
+    font-size: 0.75rem;
+    color: #999;
+    margin-left: 28px;
+}
+.select-all-btn {
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: #0d6efd;
+    background: none;
+    border: none;
+    padding: 2px 8px;
+}
+.select-all-btn:hover {
+    text-decoration: underline;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1">
+            <a href="{{ url_for('roles.list') }}" class="text-muted me-2"><i class="fas fa-arrow-left"></i></a>
+            <i class="fas fa-shield-alt me-2"></i>{{ '编辑角色' if role else '新增角色' }}
+        </h4>
+        <small class="text-muted">配置角色基本信息和功能权限</small>
+    </div>
+</div>
+
+<form method="POST" action="{{ request.url }}">
+    <!-- 基本信息 -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>基本信息</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">角色名称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="name" value="{{ role.name if role else '' }}" required placeholder="请输入角色名称">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">状态</label>
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" name="is_active" id="is_active"
+                               {% if not role or role.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">启用角色</label>
+                    </div>
+                </div>
+            </div>
+            <div class="mb-0">
+                <label class="form-label">角色描述</label>
+                <input type="text" class="form-control" name="description" value="{{ role.description if role else '' }}" placeholder="简要描述该角色的用途">
+            </div>
+        </div>
+    </div>
+
+    <!-- 权限配置 -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-key me-2"></i>权限配置</h5>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-success" onclick="selectAll()">
+                    <i class="fas fa-check-double me-1"></i>全选
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">
+                    <i class="fas fa-times me-1"></i>全不选
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            {% for module_key, module in permission_modules.items() %}
+            <div class="perm-module-card">
+                <div class="perm-module-header">
+                    <h6><i class="{{ module.icon }} me-2"></i>{{ module.name }}</h6>
+                    <button type="button" class="select-all-btn" onclick="toggleModule('{{ module_key }}', this)">
+                        全选/取消
+                    </button>
+                </div>
+                <div class="perm-grid">
+                    {% for perm_key, perm_info in module.permissions.items() %}
+                    <div class="perm-item">
+                        <div class="form-check">
+                            <input class="form-check-input perm-checkbox" type="checkbox"
+                                   name="permissions" value="{{ perm_key }}"
+                                   id="perm_{{ perm_key.replace('.', '_') }}"
+                                   data-module="{{ module_key }}"
+                                   {% if perm_key in selected_permissions %}checked{% endif %}>
+                            <label class="form-check-label" for="perm_{{ perm_key.replace('.', '_') }}">
+                                {{ perm_info.name }}
+                            </label>
+                        </div>
+                        <div class="perm-desc">{{ perm_info.desc }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save me-1"></i>保存
+        </button>
+        <a href="{{ url_for('roles.list') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-times me-1"></i>取消
+        </a>
+    </div>
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 全选
+function selectAll() {
+    document.querySelectorAll('.perm-checkbox').forEach(function(cb) {
+        cb.checked = true;
+    });
+}
+
+// 全不选
+function deselectAll() {
+    document.querySelectorAll('.perm-checkbox').forEach(function(cb) {
+        cb.checked = false;
+    });
+}
+
+// 切换模块全选
+function toggleModule(moduleKey, btn) {
+    var checkboxes = document.querySelectorAll('.perm-checkbox[data-module="' + moduleKey + '"]');
+    var allChecked = true;
+    checkboxes.forEach(function(cb) {
+        if (!cb.checked) allChecked = false;
+    });
+    checkboxes.forEach(function(cb) {
+        cb.checked = !allChecked;
+    });
+}
+
+// 模块全选按钮联动：模块内全部选中时高亮提示
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('perm-checkbox')) {
+        var moduleKey = e.target.dataset.module;
+        var all = document.querySelectorAll('.perm-checkbox[data-module="' + moduleKey + '"]');
+        var checkedCount = 0;
+        all.forEach(function(cb) { if (cb.checked) checkedCount++; });
+        // 更新模块头部状态（可选视觉反馈）
+    }
+});
+</script>
+{% endblock %}

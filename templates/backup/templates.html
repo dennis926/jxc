@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+
+{% block title %}邮件模板管理 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-end align-items-center mb-4">
+        <a href="{{ url_for('backup.index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>返回备份管理
+        </a>
+    </div>
+
+    <!-- 提示信息 -->
+    <div class="alert alert-info border-0 shadow-sm mb-4">
+        <div class="d-flex">
+            <i class="fas fa-info-circle fa-2x me-3 mt-1"></i>
+            <div>
+                <h6 class="alert-heading mb-2">模板使用说明</h6>
+                <ul class="mb-0 small">
+                    <li><strong>内置模板</strong>：系统预置的常用模板，不可删除，可以编辑修改</li>
+                    <li><strong>变量替换</strong>：模板中的 <code>{filename}</code>、<code>{datetime}</code> 等变量会在发送时自动替换为实际值</li>
+                    <li><strong>启用状态</strong>：只有启用的模板才会在配置页面可选</li>
+                    <li><strong>编辑保存</strong>：编辑后即时生效，下次发送邮件时将使用新模板</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- 可用变量说明 -->
+    <div class="card mb-4 border-0 shadow-sm">
+        <div class="card-header bg-light">
+            <a class="text-decoration-none text-dark d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#variablesCard">
+                <span><i class="fas fa-code me-2"></i>可用变量列表（点击展开）</span>
+                <i class="fas fa-chevron-down"></i>
+            </a>
+        </div>
+        <div id="variablesCard" class="collapse">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary"><i class="fas fa-clock me-1"></i>时间变量</h6>
+                        <table class="table table-sm small">
+                            <tr><td><code>{date}</code></td><td>当前日期，如：2026-06-18</td></tr>
+                            <tr><td><code>{time}</code></td><td>当前时间，如：14:30:00</td></tr>
+                            <tr><td><code>{datetime}</code></td><td>完整日期时间</td></tr>
+                            <tr><td><code>{year}</code> <code>{month}</code> <code>{day}</code></td><td>年/月/日</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary"><i class="fas fa-file-archive me-1"></i>备份信息</h6>
+                        <table class="table table-sm small">
+                            <tr><td><code>{filename}</code></td><td>备份文件名</td></tr>
+                            <tr><td><code>{file_size}</code></td><td>文件大小（自动格式化为KB/MB）</td></tr>
+                            <tr><td><code>{backup_type}</code></td><td>备份类型（手动备份/自动备份）</td></tr>
+                            <tr><td><code>{trigger_type}</code></td><td>触发方式（手动触发/定时自动）</td></tr>
+                            <tr><td><code>{system_name}</code></td><td>系统名称</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary"><i class="fas fa-chart-bar me-1"></i>统计变量</h6>
+                        <table class="table table-sm small">
+                            <tr><td><code>{total_count}</code></td><td>累计备份总次数</td></tr>
+                            <tr><td><code>{success_count}</code></td><td>成功次数</td></tr>
+                            <tr><td><code>{failed_count}</code></td><td>失败次数</td></tr>
+                            <tr><td><code>{email_sent_count}</code></td><td>邮件发送成功次数</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary"><i class="fas fa-history me-1"></i>历史信息</h6>
+                        <table class="table table-sm small">
+                            <tr><td><code>{last_backup_time}</code></td><td>上次备份时间</td></tr>
+                            <tr><td><code>{last_backup_status}</code></td><td>上次备份状态</td></tr>
+                            <tr><td><code>{user_name}</code></td><td>当前用户</td></tr>
+                            <tr><td><code>{send_time}</code></td><td>邮件发送时间</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模板列表 -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white">
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>模板列表</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 5%;">#</th>
+                        <th style="width: 20%;">模板名称</th>
+                        <th style="width: 25%;">描述</th>
+                        <th style="width: 25%;">邮件主题</th>
+                        <th style="width: 10%;">状态</th>
+                        <th style="width: 15%;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tpl in templates %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>
+                            <i class="fas fa-file-alt text-primary me-1"></i>
+                            <strong>{{ tpl.name }}</strong>
+                            {% if tpl.is_builtin %}
+                                <span class="badge bg-secondary ms-1">内置</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">{{ tpl.description or '-' }}</td>
+                        <td class="text-muted small">{{ tpl.subject[:40] }}{% if tpl.subject|length > 40 %}...{% endif %}</td>
+                        <td>
+                            {% if tpl.is_active %}
+                                <span class="badge bg-success">已启用</span>
+                            {% else %}
+                                <span class="badge bg-secondary">已禁用</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-info me-1" onclick="previewTemplate({{ tpl.id }})" title="预览">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <a href="{{ url_for('backup.edit_template', template_id=tpl.id) }}" class="btn btn-sm btn-outline-primary" title="编辑">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            {% if not tpl.is_builtin %}
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteTemplate({{ tpl.id }}, '{{ tpl.name }}')" title="删除">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="fas fa-inbox fa-2x mb-3 d-block"></i>
+                            暂无邮件模板
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 预览模态框 -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-eye me-2"></i>模板预览效果
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs mb-3" id="previewTabs">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-bs-toggle="tab" href="#tabSource">
+                            <i class="fas fa-code me-1"></i>原始模板（含变量）
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#tabRendered">
+                            <i class="fas fa-magic me-1"></i>渲染效果（变量已替换）
+                        </a>
+                    </li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="tabSource">
+                        <h6 class="text-muted">邮件主题：</h6>
+                        <div class="bg-light p-3 rounded mb-3" id="sourceSubject"></div>
+                        <h6 class="text-muted">邮件正文：</h6>
+                        <pre class="bg-light p-3 rounded mb-0" id="sourceBody" style="white-space: pre-wrap; font-family: inherit;"></pre>
+                    </div>
+                    <div class="tab-pane fade" id="tabRendered">
+                        <h6 class="text-muted">邮件主题（已渲染）：</h6>
+                        <div class="bg-light p-3 rounded mb-3" id="renderedSubject"></div>
+                        <h6 class="text-muted">邮件正文（已渲染）：</h6>
+                        <pre class="bg-light p-3 rounded mb-0" id="renderedBody" style="white-space: pre-wrap; font-family: inherit;"></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 删除确认表单 -->
+<form id="deleteForm" method="POST" style="display: none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 预览模板
+function previewTemplate(templateId) {
+    // 同时请求原始模板和渲染后的模板
+    Promise.all([
+        fetch('/backup/templates/preview/' + templateId).then(r => r.json()),
+        fetch('/backup/templates/preview-rendered/' + templateId).then(r => r.json())
+    ]).then(([source, rendered]) => {
+        if (source.success && rendered.success) {
+            document.getElementById('sourceSubject').textContent = source.subject;
+            document.getElementById('sourceBody').textContent = source.body;
+            document.getElementById('renderedSubject').textContent = rendered.subject;
+            document.getElementById('renderedBody').textContent = rendered.body;
+            new bootstrap.Modal(document.getElementById('previewModal')).show();
+        } else {
+            alert('加载模板失败');
+        }
+    }).catch(err => {
+        alert('请求失败：' + err.message);
+    });
+}
+
+// 删除模板
+function deleteTemplate(templateId, name) {
+    if (!confirm('确定要删除模板「' + name + '」吗？\n\n此操作不可撤销！')) {
+        return;
+    }
+    const form = document.getElementById('deleteForm');
+    form.action = '/backup/templates/delete/' + templateId;
+    form.submit();
+}
+</script>
+{% endblock %}

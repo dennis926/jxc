@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>请求过于频繁 - {{ site_name if site_name else '进销存管理系统' }}</title>
+    <meta name="robots" content="noindex">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/error-pages.css') }}?v={{ cache_version }}" rel="stylesheet">
+</head>
+<body class="error-page">
+    <div class="error-topline" aria-hidden="true"></div>
+
+    <main class="error-card" role="alert" aria-live="polite">
+        <div class="error-head">
+            <div class="error-badge is-warning" aria-hidden="true">
+                <i class="fas fa-gauge-high"></i>
+            </div>
+            <div>
+                <span class="error-code">HTTP 429 · TOO MANY REQUESTS</span>
+                <h1 class="error-title">操作太快了，请稍等一下</h1>
+            </div>
+        </div>
+
+        <div class="error-body">
+            <p class="error-desc">
+                为保护系统稳定，我们对短时间内的请求次数做了限制。
+                您的数据没有受到影响，冷却结束后即可继续操作。
+            </p>
+
+            <!-- 倒计时秒数由后端 Retry-After 传入，与真实限流窗口一致 -->
+            <div class="retry-panel" id="retryPanel">
+                <div class="retry-ring">
+                    <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+                        <circle class="retry-ring-track" cx="26" cy="26" r="23"
+                                fill="none" stroke-width="3"></circle>
+                        <circle class="retry-ring-fill" id="retryRingFill" cx="26" cy="26" r="23"
+                                fill="none" stroke-width="3"
+                                stroke-dasharray="144.5" stroke-dashoffset="0"></circle>
+                    </svg>
+                    <div class="retry-ring-num" id="retryNum">{{ retry_after|default(60) }}</div>
+                </div>
+                <div class="retry-text">
+                    <p class="retry-label" id="retryLabel">冷却中，请稍候</p>
+                    <p class="retry-hint" id="retryHint">倒计时结束后将自动为您重试</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="error-actions">
+            <a href="#" class="err-btn err-btn-primary" id="retryBtn" aria-disabled="true">
+                <i class="fas fa-rotate-right" aria-hidden="true"></i>
+                <span id="retryBtnText">请稍候</span>
+            </a>
+            <a href="{{ url_for('dashboard.index') }}" class="err-btn err-btn-ghost">
+                <i class="fas fa-house" aria-hidden="true"></i>
+                返回首页
+            </a>
+        </div>
+
+        <div class="error-foot">
+            <i class="fas fa-circle-info" aria-hidden="true"></i>
+            <p>
+                常见原因：连续快速刷新页面、重复点击提交按钮，或批量导出操作过于密集。
+                若持续出现，请联系系统管理员。
+            </p>
+        </div>
+    </main>
+
+    <script>
+    (function () {
+        // 冷却秒数来自后端 Retry-After 响应头，保证与实际限流窗口一致
+        var total = parseInt('{{ retry_after|default(60) }}', 10);
+        if (isNaN(total) || total < 1) { total = 60; }
+
+        var seconds     = total;
+        var CIRC        = 144.5;   // 2πr, r=23
+        var numEl       = document.getElementById('retryNum');
+        var ringEl      = document.getElementById('retryRingFill');
+        var panelEl     = document.getElementById('retryPanel');
+        var labelEl     = document.getElementById('retryLabel');
+        var hintEl      = document.getElementById('retryHint');
+        var btnEl       = document.getElementById('retryBtn');
+        var btnTextEl   = document.getElementById('retryBtnText');
+
+        function paint() {
+            numEl.textContent = seconds;
+            // 环形进度随剩余时间收缩
+            ringEl.setAttribute('stroke-dashoffset', CIRC * (1 - seconds / total));
+        }
+
+        function finish() {
+            panelEl.classList.add('is-ready');
+            numEl.innerHTML = '<i class="fas fa-check"></i>';
+            ringEl.setAttribute('stroke-dashoffset', 0);
+            labelEl.textContent = '冷却已结束';
+            hintEl.textContent  = '正在为您重新加载页面…';
+            btnEl.setAttribute('aria-disabled', 'false');
+            btnTextEl.textContent = '立即重试';
+            setTimeout(function () { location.reload(); }, 900);
+        }
+
+        paint();
+
+        var timer = setInterval(function () {
+            seconds -= 1;
+            if (seconds <= 0) {
+                clearInterval(timer);
+                seconds = 0;
+                paint();
+                finish();
+                return;
+            }
+            paint();
+        }, 1000);
+
+        btnEl.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (btnEl.getAttribute('aria-disabled') === 'true') { return; }
+            location.reload();
+        });
+    })();
+    </script>
+</body>
+</html>

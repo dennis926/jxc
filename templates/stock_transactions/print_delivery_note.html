@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>随货同行单</title>
+    <style>
+        @media print {
+            body { font-size: 12px; }
+            .no-print { display: none; }
+            @page { size: A4; margin: 10mm; }
+        }
+        body {
+            font-family: "SimSun", "宋体", serif;
+            font-size: 12px;
+            margin: 0;
+            padding: 20px;
+        }
+        .company-title {
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .header-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .header-info div {
+            display: flex;
+            gap: 15px;
+        }
+        .header-info span {
+            white-space: nowrap;
+        }
+        .table-container {
+            margin-top: 10px;
+        }
+        .delivery-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        .delivery-table th, .delivery-table td {
+            border: 1px solid #000;
+            padding: 5px 3px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .delivery-table th {
+            font-weight: bold;
+            background-color: #f0f0f0;
+        }
+        .bottom-area {
+            margin-top: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .bottom-left {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .bottom-right {
+            text-align: right;
+        }
+        .chinese-amount {
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .btn-print {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            z-index: 100;
+        }
+        .btn-print:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <button class="btn-print no-print" onclick="window.print()">打印随货同行单</button>
+
+    {# 使用表单配置中的公司名称，如果没有则使用默认值 #}
+    <div class="company-title">{{ form_config.company_name if form_config and form_config.company_name else '随货同行单' }}</div>
+
+    <div class="header-info">
+        <div>
+            <span><strong>收货单位:</strong> {{ recipient_name or '—' }}</span>
+            <span><strong>收货地址:</strong> {{ recipient_address or '—' }}</span>
+            <span><strong>发货仓库:</strong> {{ warehouse }}</span>
+        </div>
+        <div>
+            <span><strong>No:</strong> XSD-{{ serial_no }} 1/1</span>
+            <span><strong>出票日期:</strong> {{ today }}</span>
+        </div>
+    </div>
+
+    <div class="header-info">
+        <div></div>
+        <div>
+            <span><strong>总计金额:</strong> ¥{{ total_amount }}</span>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table class="delivery-table">
+            <thead>
+                <tr>
+                    <th style="width: 3%;">序</th>
+                    {% for field in form_fields %}
+                    <th>{{ field.field_name }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.seq }}</td>
+                    {% for field in form_fields %}
+                    <td>{{ item[field.field_code] if item[field.field_code] is not none else '' }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                {% for i in range(10 - items|length) %}
+                <tr>
+                    <td></td>
+                    {% for field in form_fields %}
+                    <td></td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="bottom-area">
+        <div class="bottom-left">
+            <p><strong>制单:</strong> {{ operator }}</p>
+            <p style="font-size: 10px;">货品如有差错，请在到货当天通知本公司，非质量问题恕不退还，旧残或过期商品拒绝退还</p>
+        </div>
+        <div class="bottom-right">
+            <p class="chinese-amount">本页合计人民币（大写）{{ total_amount_chinese }}</p>
+            <p><strong>¥{{ total_amount }}</strong></p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}添加收支记录 - 财务模块 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('finance.transactions') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form id="transactionForm" method="POST">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">收支类型 <span class="text-danger">*</span></label>
+                    <select name="type" id="typeSelect" class="form-select" required onchange="updateCategories()">
+                        <option value="">请选择类型</option>
+                        <option value="income">收入</option>
+                        <option value="expense">支出</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">收支分类 <span class="text-danger">*</span></label>
+                    <select name="category" id="categorySelect" class="form-select" required>
+                        <option value="">请先选择类型</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">金额 <span class="text-danger">*</span></label>
+                    <input type="number" name="amount" id="amount" class="form-control" step="0.01" min="0.01" required placeholder="请输入金额">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">账户 <span class="text-danger">*</span></label>
+                    <select name="account_id" class="form-select" required>
+                        <option value="">请选择账户</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.id }}">{{ account.name }} (余额: ¥{{ account.current_balance }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">资金方向 <span class="text-danger">*</span></label>
+                    <select name="direction" id="directionSelect" class="form-select" required>
+                        <option value="in">流入</option>
+                        <option value="out">流出</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">交易日期 <span class="text-danger">*</span></label>
+                    <input type="date" name="transaction_date" class="form-control" value="{{ today }}" required
+                           onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">对方单位/个人</label>
+                    <input type="text" name="counterparty_name" class="form-control" placeholder="请输入对方单位或姓名">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">付款方式</label>
+                    <select name="payment_method" class="form-select">
+                        <option value="">请选择</option>
+                        <option value="cash">现金</option>
+                        <option value="bank">银行转账</option>
+                        <option value="card">刷卡</option>
+                        <option value="alipay">支付宝</option>
+                        <option value="wechat">微信</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">备注</label>
+                <textarea name="remark" class="form-control" rows="3" placeholder="请输入备注信息"></textarea>
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>保存
+                </button>
+                <a href="{{ url_for('finance.transactions') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const incomeCategories = ['销售收入', '采购退款', '利息收入', '其他收入'];
+const expenseCategories = ['采购支出', '运营费用', '工资支出', '税费支出', '其他支出'];
+
+function updateCategories() {
+    const type = document.getElementById('typeSelect').value;
+    const categorySelect = document.getElementById('categorySelect');
+    const directionSelect = document.getElementById('directionSelect');
+    
+    categorySelect.innerHTML = '<option value="">请选择分类</option>';
+    
+    if (type === 'income') {
+        incomeCategories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat;
+            option.textContent = cat;
+            categorySelect.appendChild(option);
+        });
+        directionSelect.value = 'in';
+    } else if (type === 'expense') {
+        expenseCategories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat;
+            option.textContent = cat;
+            categorySelect.appendChild(option);
+        });
+        directionSelect.value = 'out';
+    }
+}
+
+$(document).ready(function() {
+    // 设置默认日期为今天
+    const today = new Date().toISOString().split('T')[0];
+    $('input[name="transaction_date"]').val(today);
+    
+    $('#transactionForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        $.ajax({
+            url: '{{ url_for("finance.add_transaction") }}',
+            method: 'POST',
+            data: $(this).serialize(),
+            success: function(res) {
+                if (res.success) {
+                    alert('添加成功');
+                    window.location.href = '{{ url_for("finance.transactions") }}';
+                } else {
+                    alert('添加失败：' + res.message);
+                }
+            },
+            error: function() {
+                alert('添加失败');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

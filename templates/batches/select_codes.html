@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}选择码段 - 出库管理 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <span class="badge bg-primary fs-6">需选择 {{ quantity }} 个码</span>
+</div>
+
+<div class="card shadow mb-4">
+    <div class="card-header bg-primary text-white">
+        <div class="row">
+            <div class="col-md-4">
+                <strong>商品：</strong>{{ batches[0].product.name if batches else '未知商品' }}
+            </div>
+            <div class="col-md-4">
+                <strong>需选数量：</strong>{{ quantity }}
+            </div>
+            <div class="col-md-4">
+                <strong>已选数量：</strong><span id="selectedCount" class="text-warning">0</span>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>说明：</strong>
+            <ul class="mb-0">
+                <li>优先选择<strong>连续码段</strong>，系统会优先分配连续的码</li>
+                <li>点击批次可展开查看可用码段</li>
+                <li>已选中的码会高亮显示</li>
+            </ul>
+        </div>
+
+        <form id="selectForm" method="POST">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <button type="button" class="btn btn-success" onclick="autoSelect()">
+                        <i class="fas fa-magic me-1"></i>自动分配（推荐）
+                    </button>
+                </div>
+                <div class="col-md-6 text-end">
+                    <button type="button" class="btn btn-outline-secondary" onclick="clearAll()">清空选择</button>
+                </div>
+            </div>
+
+            <div class="accordion" id="batchAccordion">
+                {% for batch in batches %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="heading{{ batch.id }}">
+                        <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" 
+                                data-bs-toggle="collapse" data-bs-target="#collapse{{ batch.id }}">
+                            <div class="d-flex w-100 justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ batch.batch_no }}</strong>
+                                    <span class="badge bg-secondary ms-2">{{ batch.warehouse.name }}</span>
+                                </div>
+                                <div>
+                                    <span class="badge bg-success">{{ batch.remaining_quantity }} 可用</span>
+                                </div>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="collapse{{ batch.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" 
+                         data-bs-parent="#batchAccordion">
+                        <div class="accordion-body">
+                            <p class="text-muted mb-2">
+                                <small>码段范围：<code>{{ batch.code_start }}-{{ batch.code_end }}</code></small>
+                            </p>
+                            <div class="code-grid" id="codesGrid{{ batch.id }}">
+                                {% for i in range(batch.code_start, batch.code_end + 1) %}
+                                {% if BatchCode.query.filter_by(batch_id=batch.id, code=str(i)).first().status == 'in_stock' %}
+                                <div class="code-item {% if str(i) in selected_codes %}selected{% endif %}"
+                                     data-code="{{ i }}" 
+                                     data-batch-id="{{ batch.id }}"
+                                     onclick="toggleCode(this)">
+                                    {{ i }}
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    暂无可用批次或批次库存已用完
+                </div>
+                {% endfor %}
+            </div>
+
+            <input type="hidden" name="selected_codes" id="selectedCodes" value="">
+        </form>
+    </div>
+</div>
+
+<div class="text-end">
+    <button type="button" class="btn btn-secondary" onclick="window.close()">取消</button>
+    <button type="button" class="btn btn-primary" onclick="submitSelection()">
+        <i class="fas fa-check me-1"></i>确认选择
+    </button>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.code-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    gap: 5px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 5px;
+}
+
+.code-item {
+    padding: 8px 4px;
+    text-align: center;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.code-item:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.code-item.selected {
+    background: #198754;
+    color: white;
+    border-color: #198754;
+}
+
+.code-item.disabled {
+    background: #e9ecef;
+    color: #adb5bd;
+    cursor: not-allowed;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const selectedCodes = new Set();
+const quantityNeeded = {{ quantity }};
+const batchCodes = {};
+
+// 初始化
+$(document).ready(function() {
+    $('.code-item').each(function() {
+        const code = $(this).data('code');
+        const batchId = $(this).data('batchId');
+        
+        if (!batchCodes[batchId]) {
+            batchCodes[batchId] = [];
+        }
+        batchCodes[batchId].push(code);
+        
+        if ($(this).hasClass('selected')) {
+            selectedCodes.add(code);
+        }
+    });
+    
+    updateCount();
+});
+
+function toggleCode(element) {
+    if ($(element).hasClass('disabled')) return;
+    
+    const code = $(element).data('code');
+    
+    if (selectedCodes.has(code)) {
+        selectedCodes.delete(code);
+        $(element).removeClass('selected');
+    } else {
+        selectedCodes.add(code);
+        $(element).addClass('selected');
+    }
+    
+    updateCount();
+}
+
+function updateCount() {
+    $('#selectedCount').text(selectedCodes.size);
+    
+    if (selectedCodes.size >= quantityNeeded) {
+        $('#selectedCount').removeClass('text-warning').addClass('text-success');
+    } else {
+        $('#selectedCount').removeClass('text-success').addClass('text-warning');
+    }
+}
+
+function autoSelect() {
+    // 清空现有选择
+    selectedCodes.clear();
+    $('.code-item.selected').removeClass('selected');
+    
+    let selected = 0;
+    
+    // 按批次顺序遍历，选择连续的码
+    for (const batchId in batchCodes) {
+        if (selected >= quantityNeeded) break;
+        
+        const codes = batchCodes[batchId].sort((a, b) => a - b);
+        
+        for (let i = 0; i < codes.length && selected < quantityNeeded; i++) {
+            if (!selectedCodes.has(codes[i])) {
+                selectedCodes.add(codes[i]);
+                selected++;
+                
+                $(`.code-item[data-code="${codes[i]}"]`).addClass('selected');
+            }
+        }
+    }
+    
+    updateCount();
+}
+
+function clearAll() {
+    selectedCodes.clear();
+    $('.code-item.selected').removeClass('selected');
+    updateCount();
+}
+
+function submitSelection() {
+    if (selectedCodes.size !== quantityNeeded) {
+        alert(`请选择 ${quantityNeeded} 个码，当前已选择 ${selectedCodes.size} 个`);
+        return;
+    }
+    
+    const codesArray = Array.from(selectedCodes).sort((a, b) => a - b);
+    $('#selectedCodes').val(codesArray.join(','));
+    
+    // 将选择返回给父窗口
+    if (window.opener) {
+        window.opener.receiveSelectedCodes(codesArray.join(','));
+        window.close();
+    } else {
+        alert('无法返回选择的码段');
+    }
+}
+</script>
+{% endblock %}

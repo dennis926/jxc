@@ -1,0 +1,634 @@
+{% extends "base.html" %}
+
+{% block title %}出入库记录 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <div class="btn-group" role="group">
+        <a href="{{ url_for('stock_transactions.export', type=tx_type, start_date=start_date, end_date=end_date, search=search, product_name=product_name, warehouse_id=warehouse_id) }}" class="btn btn-success">
+            <i class="fas fa-file-excel me-1"></i>导出全部
+        </a>
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-download me-1"></i>入库记录
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="javascript:void(0);" onclick="exportStockIn()"><i class="fas fa-file-excel me-1"></i>导出Excel</a></li>
+                <li><a class="dropdown-item" href="javascript:void(0);" onclick="printStockIn()"><i class="fas fa-print me-1"></i>打印</a></li>
+            </ul>
+        </div>
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-warning text-dark dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-download me-1"></i>出库记录
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="javascript:void(0);" onclick="exportStockOut()"><i class="fas fa-file-excel me-1"></i>导出Excel</a></li>
+                <li><a class="dropdown-item" href="javascript:void(0);" onclick="printStockOut()"><i class="fas fa-print me-1"></i>打印</a></li>
+            </ul>
+        </div>
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-info text-white dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-file-text me-1"></i>随货同行单
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="javascript:void(0);" onclick="exportDeliveryNote()"><i class="fas fa-file-excel me-1"></i>导出Excel</a></li>
+                <li><a class="dropdown-item" href="javascript:void(0);" onclick="printDeliveryNoteCheck()"><i class="fas fa-print me-1"></i>打印</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- 筛选条件 -->
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-2">
+                <select name="type" class="form-select">
+                    <option value="">全部类型</option>
+                    {% for val, label in type_options %}
+                    <option value="{{ val }}" {% if tx_type == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="warehouse_id" class="form-select">
+                    <option value="0">全部仓库</option>
+                    {% for warehouse in warehouses %}
+                    <option value="{{ warehouse.id }}" {% if warehouse_id == warehouse.id %}selected{% endif %}>{{ warehouse.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <input type="text" name="product_name" class="form-control" placeholder="商品或者客户..." value="{{ product_name }}">
+            </div>
+            <div class="col-md-2">
+                <input type="date" name="start_date" class="form-control" value="{{ start_date }}" title="开始日期"
+                       onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+            </div>
+            <div class="col-md-2">
+                <input type="date" name="end_date" class="form-control" value="{{ end_date }}" title="结束日期"
+                       onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+            </div>
+            <div class="col-md-2">
+                <input type="text" name="search" class="form-control" placeholder="搜索单号..." value="{{ search }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-outline-primary">
+                    <i class="fas fa-search me-1"></i>筛选
+                </button>
+                <a href="{{ url_for('stock_transactions.list') }}" class="btn btn-outline-secondary">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 记录列表 -->
+<div class="card shadow">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 50px;">
+                            <input type="checkbox" id="select-all" onchange="toggleSelectAll(this)">
+                        </th>
+                        <th>序号</th>
+                        <th class="sortable" data-sort="transaction_no">
+                            单号
+                            <i class="fas fa-sort{% if sort == 'transaction_no' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-sort="type">
+                            类型
+                            <i class="fas fa-sort{% if sort == 'type' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th>商品名称</th>
+                        <th>商品编码</th>
+                        <th>规格</th>
+                        <th>条形码</th>
+                        <th>仓库</th>
+                        <th>收货方</th>
+                        <th>生产日期</th>
+                        <th>有效日期</th>
+                        <th class="sortable" data-sort="quantity">
+                            数量
+                            <i class="fas fa-sort{% if sort == 'quantity' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th>关联单号</th>
+                        <th class="sortable" data-sort="operator">
+                            操作人
+                            <i class="fas fa-sort{% if sort == 'operator' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th>备注</th>
+                        <th class="sortable" data-sort="created_at">
+                            时间
+                            <i class="fas fa-sort{% if sort == 'created_at' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in transactions %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" class="tx-checkbox" data-id="{{ tx.id }}" data-type="{{ tx.type }}" data-customer-name="{{ tx.customer_name or (tx.customer.name if tx.customer else '') }}" data-warehouse-name="{{ tx.warehouse.name if tx.warehouse else '' }}">
+                        </td>
+                        <td>{{ loop.index + (pagination.page - 1) * pagination.per_page }}</td>
+                        <td>{{ tx.transaction_no }}</td>
+                        <td>
+                            {% if tx.type == 'stock_in' %}
+                                <span class="badge bg-success">入库</span>
+                            {% elif tx.type == 'stock_out' %}
+                                <span class="badge bg-danger">出库</span>
+                            {% elif tx.type == 'transfer_in' %}
+                                <span class="badge bg-info">调入</span>
+                            {% elif tx.type == 'transfer_out' %}
+                                <span class="badge bg-warning text-dark">调出</span>
+                            {% elif tx.type == 'adjustment' %}
+                                <span class="badge bg-secondary">调整</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ tx.product.name if tx.product else '-' }}</td>
+                        <td>{{ tx.product.sku if tx.product else '-' }}</td>
+                        <td>{{ tx.product.specification if tx.product and tx.product.specification else '-' }}</td>
+                        <td>{{ tx.product.barcode if tx.product and tx.product.barcode else '-' }}</td>
+                        <td>{{ tx.warehouse.name if tx.warehouse else '-' }}</td>
+                        <td>
+                            {% if tx.customer_name %}
+                                <span class="text-primary">{{ tx.customer_name }}</span>
+                            {% elif tx.customer %}
+                                <span class="text-primary">{{ tx.customer.name }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ tx.batch_info.production_date if tx.batch_info and tx.batch_info.production_date else '-' }}</td>
+                        <td>{{ tx.batch_info.expire_date if tx.batch_info and tx.batch_info.expire_date else '-' }}</td>
+                        <td>{{ tx.quantity }}</td>
+                        <td>{{ tx.reference_no or '-' }}</td>
+                        <td>{{ tx.operator or '-' }}</td>
+                        <td>{{ tx.remark or '-' }}</td>
+                        <td>{{ tx.created_at.strftime('%Y-%m-%d %H:%M') if tx.created_at else '-' }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction({{ tx.id }}, '{{ tx.transaction_no }}')" title="删除">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="18" class="text-center text-muted py-3">暂无记录</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        {% if pagination.pages > 1 %}
+        <nav>
+            <ul class="pagination justify-content-center">
+                {% if pagination.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('stock_transactions.list', page=pagination.prev_num, type=tx_type, start_date=start_date, end_date=end_date, search=search, product_name=product_name, warehouse_id=warehouse_id, sort=sort, order=order) }}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for p in pagination.iter_pages() %}
+                    {% if p %}
+                        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('stock_transactions.list', page=p, type=tx_type, start_date=start_date, end_date=end_date, search=search, product_name=product_name, warehouse_id=warehouse_id, sort=sort, order=order) }}">{{ p }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagination.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('stock_transactions.list', page=pagination.next_num, type=tx_type, start_date=start_date, end_date=end_date, search=search, product_name=product_name, warehouse_id=warehouse_id, sort=sort, order=order) }}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.sortable:hover {
+    background-color: #f0f0f0;
+}
+.sort-icon {
+    margin-left: 5px;
+    color: #999;
+    font-size: 0.8em;
+}
+.sortable .fa-sort-up,
+.sortable .fa-sort-down {
+    color: #0d6efd;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var currentSort = '{{ sort }}';
+var currentOrder = '{{ order }}';
+
+function handleSort(sortField) {
+    var newOrder = 'asc';
+    if (currentSort === sortField) {
+        newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+    }
+    var url = new URL(window.location.href);
+    url.searchParams.set('sort', sortField);
+    url.searchParams.set('order', newOrder);
+    url.searchParams.delete('page');
+    window.location.href = url.toString();
+}
+
+document.querySelectorAll('.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+        var sortField = this.getAttribute('data-sort');
+        if (sortField) {
+            handleSort(sortField);
+        }
+    });
+});
+
+// 全选/取消全选
+function toggleSelectAll(checkbox) {
+    document.querySelectorAll('.tx-checkbox').forEach(function(cb) {
+        cb.checked = checkbox.checked;
+    });
+}
+
+// 获取选中的记录ID
+function getSelectedIds() {
+    var checkboxes = document.querySelectorAll('.tx-checkbox:checked');
+    var ids = [];
+    checkboxes.forEach(function(cb) {
+        ids.push(cb.getAttribute('data-id'));
+    });
+    return ids.join(',');
+}
+
+// 获取选中的客户名称
+function getSelectedCustomerNames() {
+    var checkboxes = document.querySelectorAll('.tx-checkbox:checked');
+    var customerNames = [];
+    checkboxes.forEach(function(cb) {
+        customerNames.push(cb.getAttribute('data-customer-name'));
+    });
+    return customerNames;
+}
+
+// 获取选中的仓库名称
+function getSelectedWarehouseNames() {
+    var checkboxes = document.querySelectorAll('.tx-checkbox:checked');
+    var warehouseNames = [];
+    checkboxes.forEach(function(cb) {
+        warehouseNames.push(cb.getAttribute('data-warehouse-name'));
+    });
+    return warehouseNames;
+}
+
+// 构建URL基础函数
+function buildBaseUrl(basePath) {
+    var url = new URL(basePath, window.location.origin);
+    url.searchParams.set('start_date', '{{ start_date }}');
+    url.searchParams.set('end_date', '{{ end_date }}');
+    url.searchParams.set('product_name', '{{ product_name }}');
+    url.searchParams.set('warehouse_id', '{{ warehouse_id }}');
+    return url;
+}
+
+// 导出入库记录
+function exportStockIn() {
+    var selectedIds = getSelectedIds();
+    if (!selectedIds) {
+        if (!confirm('未选择任何记录，是否要导出全部入库记录？')) {
+            return;
+        }
+    } else {
+        // 检查选中的是否都是入库记录
+        var selectedTypes = getSelectedTypes();
+        var selectedCount = selectedTypes.length;
+        var stockInCount = selectedTypes.filter(function(type) {
+            return type === 'stock_in';
+        }).length;
+        
+        // 如果选中的记录中包含非入库记录，提示错误
+        if (stockInCount < selectedCount) {
+            alert('您选择了 ' + selectedCount + ' 条记录，其中 ' + stockInCount + ' 条是入库记录，' + (selectedCount - stockInCount) + ' 条是其他类型记录。\n\n此功能仅适用于入库记录，请只选择入库记录！');
+            return;
+        }
+    }
+    
+    var url = buildBaseUrl('{{ url_for('stock_transactions.export_stock_in') }}');
+    if (selectedIds) {
+        url.searchParams.set('ids', selectedIds);
+    }
+    window.location.href = url.toString();
+}
+
+// 打印入库记录
+function printStockIn() {
+    var selectedIds = getSelectedIds();
+    if (!selectedIds) {
+        if (!confirm('未选择任何记录，是否要打印全部入库记录？')) {
+            return;
+        }
+    } else {
+        // 检查选中的是否都是入库记录
+        var selectedTypes = getSelectedTypes();
+        var selectedCount = selectedTypes.length;
+        var stockInCount = selectedTypes.filter(function(type) {
+            return type === 'stock_in';
+        }).length;
+        
+        // 如果选中的记录中包含非入库记录，提示错误
+        if (stockInCount < selectedCount) {
+            alert('您选择了 ' + selectedCount + ' 条记录，其中 ' + stockInCount + ' 条是入库记录，' + (selectedCount - stockInCount) + ' 条是其他类型记录。\n\n此功能仅适用于入库记录，请只选择入库记录！');
+            return;
+        }
+    }
+    
+    var url = buildBaseUrl('{{ url_for('stock_transactions.print_stock_in') }}');
+    if (selectedIds) {
+        url.searchParams.set('ids', selectedIds);
+    }
+    window.open(url.toString(), '_blank');
+}
+
+// 导出出库记录
+function exportStockOut() {
+    var selectedIds = getSelectedIds();
+    if (!selectedIds) {
+        if (!confirm('未选择任何记录，是否要导出全部出库记录？')) {
+            return;
+        }
+    } else {
+        // 检查选中的是否都是出库记录
+        var selectedTypes = getSelectedTypes();
+        var selectedCount = selectedTypes.length;
+        var stockOutCount = selectedTypes.filter(function(type) {
+            return type === 'stock_out';
+        }).length;
+        
+        // 如果选中的记录中包含非出库记录，提示错误
+        if (stockOutCount < selectedCount) {
+            alert('您选择了 ' + selectedCount + ' 条记录，其中 ' + stockOutCount + ' 条是出库记录，' + (selectedCount - stockOutCount) + ' 条是其他类型记录。\n\n此功能仅适用于出库记录，请只选择出库记录！');
+            return;
+        }
+    }
+    
+    var url = buildBaseUrl('{{ url_for('stock_transactions.export_stock_out') }}');
+    if (selectedIds) {
+        url.searchParams.set('ids', selectedIds);
+    }
+    window.location.href = url.toString();
+}
+
+// 打印出库记录
+function printStockOut() {
+    var selectedIds = getSelectedIds();
+    if (!selectedIds) {
+        if (!confirm('未选择任何记录，是否要打印全部出库记录？')) {
+            return;
+        }
+    } else {
+        // 检查选中的是否都是出库记录
+        var selectedTypes = getSelectedTypes();
+        var selectedCount = selectedTypes.length;
+        var stockOutCount = selectedTypes.filter(function(type) {
+            return type === 'stock_out';
+        }).length;
+        
+        // 如果选中的记录中包含非出库记录，提示错误
+        if (stockOutCount < selectedCount) {
+            alert('您选择了 ' + selectedCount + ' 条记录，其中 ' + stockOutCount + ' 条是出库记录，' + (selectedCount - stockOutCount) + ' 条是其他类型记录。\n\n此功能仅适用于出库记录，请只选择出库记录！');
+            return;
+        }
+    }
+    
+    var url = buildBaseUrl('{{ url_for('stock_transactions.print_stock_out') }}');
+    if (selectedIds) {
+        url.searchParams.set('ids', selectedIds);
+    }
+    window.open(url.toString(), '_blank');
+}
+
+// 获取选中的记录类型
+function getSelectedTypes() {
+    var checkboxes = document.querySelectorAll('.tx-checkbox:checked');
+    var types = [];
+    checkboxes.forEach(function(cb) {
+        types.push(cb.getAttribute('data-type'));
+    });
+    return types;
+}
+
+// 导出随货同行单
+function exportDeliveryNote() {
+    var selectedIds = getSelectedIds();
+    
+    if (!selectedIds) {
+        alert('未选择任何记录，请选择要导出的出库记录！');
+        return;
+    }
+    
+    // 检查选中的是否都是出库记录
+    var selectedTypes = getSelectedTypes();
+    var selectedCount = selectedTypes.length;
+    var stockOutCount = selectedTypes.filter(function(type) {
+        return type === 'stock_out';
+    }).length;
+    
+    // 如果选中的记录中包含非出库记录，提示错误
+    if (stockOutCount < selectedCount) {
+        alert('您选择了 ' + selectedCount + ' 条记录，其中 ' + stockOutCount + ' 条是出库记录，' + (selectedCount - stockOutCount) + ' 条是其他类型记录。\n\n随货同行单仅适用于出库记录，请只选择出库记录！');
+        return;
+    }
+    
+    var customerNames = getSelectedCustomerNames();
+    var uniqueCustomerNames = [...new Set(customerNames.filter(name => name))];
+    
+    var warehouseNames = getSelectedWarehouseNames();
+    var uniqueWarehouseNames = [...new Set(warehouseNames.filter(name => name))];
+    
+    if (uniqueCustomerNames.length > 1) {
+        alert('当前选择了多个收货方（' + uniqueCustomerNames.length + ' 个），只能选择相同的收货方打印或导出！');
+        return;
+    }
+    
+    if (uniqueWarehouseNames.length > 1) {
+        alert('当前选择了多个仓库（' + uniqueWarehouseNames.length + ' 个），只能选择相同的仓库打印或导出！');
+        return;
+    }
+    
+    var url = buildBaseUrl('{{ url_for('stock_transactions.export_delivery_note') }}');
+    if (selectedIds) {
+        url.searchParams.set('ids', selectedIds);
+    }
+    window.location.href = url.toString();
+}
+
+// 打印随货同行单检查
+function printDeliveryNoteCheck() {
+    var selectedIds = getSelectedIds();
+    
+    if (!selectedIds) {
+        alert('未选择任何记录，请选择要打印的出库记录！');
+        return;
+    }
+    
+    // 检查选中的是否都是出库记录
+    var selectedTypes = getSelectedTypes();
+    var selectedCount = selectedTypes.length;
+    var stockOutCount = selectedTypes.filter(function(type) {
+        return type === 'stock_out';
+    }).length;
+    
+    // 如果选中的记录中包含非出库记录，提示错误
+    if (stockOutCount < selectedCount) {
+        alert('您选择了 ' + selectedCount + ' 条记录，其中 ' + stockOutCount + ' 条是出库记录，' + (selectedCount - stockOutCount) + ' 条是其他类型记录。\n\n随货同行单仅适用于出库记录，请只选择出库记录！');
+        return;
+    }
+    
+    var customerNames = getSelectedCustomerNames();
+    var uniqueCustomerNames = [...new Set(customerNames.filter(name => name))];
+    
+    var warehouseNames = getSelectedWarehouseNames();
+    var uniqueWarehouseNames = [...new Set(warehouseNames.filter(name => name))];
+    
+    if (uniqueCustomerNames.length > 1) {
+        alert('当前选择了多个收货方（' + uniqueCustomerNames.length + ' 个），只能选择相同的收货方打印或导出！');
+        return;
+    }
+    
+    if (uniqueWarehouseNames.length > 1) {
+        alert('当前选择了多个仓库（' + uniqueWarehouseNames.length + ' 个），只能选择相同的仓库打印或导出！');
+        return;
+    }
+    
+    printDeliveryNote();
+}
+
+// 打印随货同行单
+function printDeliveryNote() {
+    var selectedIds = getSelectedIds();
+    var url = buildBaseUrl('{{ url_for('stock_transactions.print_delivery_note') }}');
+    if (selectedIds) {
+        url.searchParams.set('ids', selectedIds);
+    }
+    window.open(url.toString(), '_blank');
+}
+
+// 删除出入库记录
+function deleteTransaction(txId, txNo) {
+    if (!confirm('确定要删除记录 ' + txNo + ' 吗？\n\n此操作不可恢复！')) return;
+    
+    fetch('/stock-transactions/delete/' + txId, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            alert('删除成功');
+            window.location.reload();
+        } else {
+            // 构建带关联单号的提示信息
+            var msg = '无法删除：\n\n' + data.message;
+            if (data.related_nos && data.related_nos.length > 0) {
+                msg += '\n\n关联单号（点击可复制）：';
+                for (var i = 0; i < data.related_nos.length; i++) {
+                    msg += '\n  ' + data.related_nos[i];
+                }
+            }
+            // 使用自定义弹窗显示
+            showDeleteBlockerModal(data.message, data.related_nos || []);
+        }
+    })
+    .catch(function(error) {
+        alert('请求失败：' + error.message);
+    });
+}
+
+// 复制单号到剪贴板
+function copyToClipboard(text, btn) {
+    navigator.clipboard.writeText(text).then(function() {
+        btn.textContent = '已复制';
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-success');
+        setTimeout(function() {
+            btn.textContent = '复制';
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-primary');
+        }, 2000);
+    }).catch(function() {
+        // 降级方案
+        var textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        btn.textContent = '已复制';
+        setTimeout(function() { btn.textContent = '复制'; }, 2000);
+    });
+}
+
+// 显示删除阻断弹窗（含关联单号和复制按钮）
+function showDeleteBlockerModal(message, relatedNos) {
+    // 移除已有弹窗
+    var old = document.getElementById('deleteBlockerModal');
+    if (old) old.remove();
+    
+    var html = '<div class="modal fade" id="deleteBlockerModal" tabindex="-1">';
+    html += '<div class="modal-dialog modal-dialog-centered">';
+    html += '<div class="modal-content">';
+    html += '<div class="modal-header bg-warning">';
+    html += '<h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>无法删除</h5>';
+    html += '<button type="button" class="btn-close" data-bs-dismiss="modal"></button>';
+    html += '</div>';
+    html += '<div class="modal-body">';
+    html += '<p>' + message + '</p>';
+    if (relatedNos.length > 0) {
+        html += '<hr><h6>关联单号（可复制后去搜索删除）：</h6>';
+        html += '<div class="list-group mt-2">';
+        for (var i = 0; i < relatedNos.length; i++) {
+            html += '<div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">';
+            html += '<div><i class="fas fa-link me-2 text-muted"></i><strong>' + relatedNos[i] + '</strong></div>';
+            html += '<button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard(\'' + relatedNos[i] + '\', this)">复制</button>';
+            html += '</div>';
+        }
+        html += '</div>';
+    }
+    html += '</div>';
+    html += '<div class="modal-footer">';
+    html += '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>';
+    html += '</div></div></div></div>';
+    
+    document.body.insertAdjacentHTML('beforeend', html);
+    var modal = new bootstrap.Modal(document.getElementById('deleteBlockerModal'));
+    modal.show();
+    modal._element.addEventListener('hidden.bs.modal', function() {
+        document.getElementById('deleteBlockerModal').remove();
+    });
+}
+</script>
+{% endblock %}

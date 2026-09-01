@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}供应商列表 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<!-- 页面标题 -->
+<div class="page-header">
+    <div class="page-header-title">
+        <i class="fas fa-truck"></i>
+        <span>供应商管理</span>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('suppliers.export') }}" class="btn btn-success">
+            <i class="fas fa-file-excel"></i>
+            <span>导出Excel</span>
+        </a>
+        <a href="{{ url_for('suppliers.create') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i>
+            <span>新增供应商</span>
+        </a>
+    </div>
+</div>
+
+<!-- 搜索 -->
+<div class="card mb-4">
+    <div class="card-body p-4">
+        <form method="get">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="form-group mb-0">
+                        <input type="text" name="search" class="form-control" placeholder="搜索供应商名称或联系人..."
+                               value="{{ search }}">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="fas fa-search"></i>
+                        <span>搜索</span>
+                    </button>
+                    <a href="{{ url_for('suppliers.list') }}" class="btn btn-outline-secondary">
+                        <span>重置</span>
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 供应商列表 -->
+<div class="card">
+    <div class="card-body p-0">
+        {% if suppliers %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-sort="name">
+                            名称
+                            <i class="fas fa-sort{% if sort == 'name' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-sort="contact_person">
+                            联系人
+                            <i class="fas fa-sort{% if sort == 'contact_person' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-sort="contact_phone">
+                            联系电话
+                            <i class="fas fa-sort{% if sort == 'contact_phone' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th>邮箱</th>
+                        <th>地址</th>
+                        <th class="sortable" data-sort="created_at">
+                            创建时间
+                            <i class="fas fa-sort{% if sort == 'created_at' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th class="text-center">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for supplier in suppliers %}
+                    <tr>
+                        <td>{{ supplier.name }}</td>
+                        <td>{{ supplier.contact_person or '-' }}</td>
+                        <td>{{ supplier.contact_phone or '-' }}</td>
+                        <td>{{ supplier.email or '-' }}</td>
+                        <td>{{ supplier.address or '-' }}</td>
+                        <td>{{ supplier.created_at.strftime('%Y-%m-%d %H:%M') if supplier.created_at else '-' }}</td>
+                        <td class="text-center">
+                            <a href="{{ url_for('suppliers.edit', id=supplier.id) }}" class="btn btn-sm btn-outline-primary" title="编辑">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <form method="post" action="{{ url_for('suppliers.delete', id=supplier.id) }}"
+                                  class="d-inline" onsubmit="return confirm('确定要删除该供应商吗？')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        {% if pagination.pages > 1 %}
+        <div class="p-4">
+            <nav>
+                <ul class="pagination justify-content-center mb-0">
+                    {% if pagination.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('suppliers.list', page=pagination.prev_num, search=search, sort=sort, order=order) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for p in pagination.iter_pages() %}
+                        {% if p %}
+                            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('suppliers.list', page=p, search=search, sort=sort, order=order) }}">{{ p }}</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if pagination.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('suppliers.list', page=pagination.next_num, search=search, sort=sort, order=order) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+        {% else %}
+        <!-- 空状态 -->
+        <div class="empty-state">
+            <i class="fas fa-truck"></i>
+            <h3>暂无供应商数据</h3>
+            <p>点击"新增供应商"按钮创建您的第一个供应商</p>
+            <a href="{{ url_for('suppliers.create') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i>
+                <span>新增供应商</span>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.sortable:hover {
+    background-color: var(--bg-tertiary);
+}
+.sort-icon {
+    margin-left: 5px;
+    color: var(--text-tertiary);
+    font-size: 0.8em;
+}
+.sortable .fa-sort-up,
+.sortable .fa-sort-down {
+    color: var(--primary-color);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var currentSort = '{{ sort }}';
+var currentOrder = '{{ order }}';
+
+function handleSort(sortField) {
+    var newOrder = 'asc';
+    if (currentSort === sortField) {
+        newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+    }
+    var url = new URL(window.location.href);
+    url.searchParams.set('sort', sortField);
+    url.searchParams.set('order', newOrder);
+    url.searchParams.delete('page');
+    window.location.href = url.toString();
+}
+
+document.querySelectorAll('.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+        var sortField = this.getAttribute('data-sort');
+        if (sortField) {
+            handleSort(sortField);
+        }
+    });
+});
+</script>
+{% endblock %}

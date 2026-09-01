@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}400 - 请求格式有误{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/error-pages.css') }}?v={{ cache_version }}" rel="stylesheet">
+<style>
+/* 嵌入 base.html 布局时的容器适配（错误页样式表本身面向独立整页） */
+.error-inline-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 65vh;
+    padding: 24px;
+}
+.error-inline-wrap .error-card { margin: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-inline-wrap">
+    <main class="error-card" role="alert">
+        <div class="error-head">
+            <div class="error-badge is-warning" aria-hidden="true">
+                <i class="fas fa-triangle-exclamation"></i>
+            </div>
+            <div>
+                <span class="error-code">HTTP 400 · BAD REQUEST</span>
+                <h1 class="error-title">请求格式有误</h1>
+            </div>
+        </div>
+
+        <div class="error-body">
+            <p class="error-desc">服务器无法理解这个请求，通常是提交的数据格式不正确或缺少必填项。</p>
+        </div>
+
+        <div class="error-actions">
+            <a href="{{ url_for('dashboard.index') }}" class="err-btn err-btn-primary">
+                <i class="fas fa-house" aria-hidden="true"></i>
+                返回首页
+            </a>
+            <a href="#" class="err-btn err-btn-ghost" onclick="history.back(); return false;">
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                返回上一页
+            </a>
+        </div>
+
+        <div class="error-foot">
+            <i class="fas fa-circle-info" aria-hidden="true"></i>
+            <p>建议返回上一页检查表单内容后重新提交。若反复出现，请联系系统管理员。</p>
+        </div>
+    </main>
+</div>
+{% endblock %}

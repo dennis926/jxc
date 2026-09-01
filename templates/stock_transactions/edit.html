@@ -1,0 +1,765 @@
+{% extends "base.html" %}
+
+{% block title %}编辑{{ '入库' if tx.type == 'stock_in' else '出库' if tx.type == 'stock_out' else '调拨' }}记录 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <!-- 顶栏已显示"编辑出入库记录"，此处只保留顶栏没有的单号与业务类型信息 -->
+    <div class="text-muted">
+        <span class="badge bg-light text-dark me-2">{{ '入库' if tx.type == 'stock_in' else '出库' if tx.type == 'stock_out' else '调拨' }}</span>
+        单号 <span class="fw-medium">{{ tx.transaction_no }}</span>
+    </div>
+    <a href="{{ url_for('stock_transactions.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<!-- 关联信息提示 -->
+{% if tx.type == 'stock_in' and (related_info.stock_out_count > 0 or related_info.transfer_count > 0) %}
+<div class="alert alert-warning">
+    <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>注意：该入库记录存在关联数据</h6>
+    <ul class="mb-0 small">
+        {% if related_info.stock_out_count > 0 %}
+        <li>已有 <strong>{{ related_info.stock_out_count }}</strong> 条出库记录，共 <strong>{{ related_info.total_out_quantity }}</strong> 盒</li>
+        {% endif %}
+        {% if related_info.transfer_count > 0 %}
+        <li>已有 <strong>{{ related_info.transfer_count }}</strong> 条调拨记录，共 <strong>{{ related_info.total_transfer_quantity }}</strong> 盒</li>
+        {% endif %}
+    </ul>
+    <hr class="my-2">
+    <p class="mb-0 small"><strong>修改后的数量不能低于 {{ related_info.total_out_quantity + related_info.total_transfer_quantity }} 盒</strong></p>
+</div>
+{% endif %}
+
+{% if tx.type == 'stock_out' %}
+<div class="alert alert-info">
+    <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>出库记录编辑说明</h6>
+    <p class="mb-0 small">出库数量受原入库数量限制，修改后的数量不能超过原入库的剩余数量。</p>
+</div>
+{% endif %}
+
+{% if tx.type in ['transfer_in', 'transfer_out'] and related_info.stock_out_count > 0 %}
+<div class="alert alert-warning">
+    <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>注意：该调拨记录存在关联数据</h6>
+    <p class="mb-0 small">已有 <strong>{{ related_info.stock_out_count }}</strong> 条出库记录，修改后的数量不能低于 <strong>{{ related_info.total_out_quantity }}</strong> 盒</p>
+</div>
+{% endif %}
+
+<!-- ==================== 入库编辑表单（和新增入库页面一致） ==================== -->
+{% if tx.type == 'stock_in' %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title">修改入库信息</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" class="needs-validation" id="stockInForm" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="warehouse_id" class="form-label required">入库仓库</label>
+                        <select class="form-select" id="warehouse_id" name="warehouse_id" required>
+                            <option value="">请选择仓库</option>
+                            {% for w in warehouses %}
+                            <option value="{{ w.id }}" {% if w.id == tx.warehouse_id %}selected{% endif %}>{{ w.name }} ({{ w.code }})</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">请选择仓库</div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="product_id" class="form-label required">入库商品</label>
+                        <select class="form-select" id="product_id" name="product_id" required>
+                            <option value="">请选择商品</option>
+                            {% for p in products %}
+                            <option value="{{ p.id }}" data-cost-price="{{ p.cost_price or 0 }}" data-selling-price="{{ p.selling_price or 0 }}" {% if p.id == tx.product_id %}selected{% endif %}>{{ p.name }} ({{ p.sku }})</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">请选择商品</div>
+                        <div id="productPriceInfo" class="mt-1" style="display: none;">
+                            <small class="text-muted">
+                                <i class="fas fa-tag me-1"></i>成本价: <strong id="productCostPrice">0</strong> 元 |
+                                售价: <strong id="productSellingPrice">0</strong> 元
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="quantity" class="form-label required">入库数量</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity"
+                               min="{{ related_info.total_out_quantity + related_info.total_transfer_quantity }}" max="5000" required placeholder="请输入数量"
+                               value="{{ tx.quantity }}">
+                        <div class="invalid-feedback">请输入入库数量</div>
+                        <div class="form-text text-muted">最低 {{ related_info.total_out_quantity + related_info.total_transfer_quantity }} 盒，单次最多5000个</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="unit_cost" class="form-label">单位成本</label>
+                        <input type="number" step="0.01" min="0" class="form-control" id="unit_cost" name="unit_cost"
+                               value="{{ tx.unit_cost or 0 }}" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="reference_no" class="form-label">关联单号</label>
+                        <input type="text" class="form-control" id="reference_no" name="reference_no"
+                               value="{{ tx.reference_no or '' }}" placeholder="如采购单号">
+                    </div>
+                </div>
+
+                <!-- 生产日期和有效期 -->
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="production_date" class="form-label">
+                            <i class="fas fa-calendar-alt me-1"></i>生产日期
+                        </label>
+                        <input type="date" class="form-control" id="production_date" name="production_date"
+                               value="{{ tx.batch_info.production_date.strftime('%Y-%m-%d') if tx.batch_info and tx.batch_info.production_date else '' }}"
+                               onkeydown="return false;" onpaste="return false;" autocomplete="off">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="expire_date" class="form-label">
+                            <i class="fas fa-calendar-times me-1"></i>过期日期
+                        </label>
+                        <input type="date" class="form-control" id="expire_date" name="expire_date"
+                               value="{{ tx.batch_info.expire_date.strftime('%Y-%m-%d') if tx.batch_info and tx.batch_info.expire_date else '' }}"
+                               onkeydown="return false;" onpaste="return false;" autocomplete="off">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-clock me-1"></i>有效期预览
+                        </label>
+                        <div id="validityPreview" class="form-control-plaintext text-muted">
+                            填写日期后自动计算
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 防窜货码输入区域 -->
+                <div class="col-12">
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-barcode me-2"></i>防窜货码（支持扫码或手动输入）
+                        </label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="batch_codes_input"
+                                   value="{{ tx.batch_codes or '' }}"
+                                   placeholder="扫描条形码或手动输入，如：LYJYQEM100004000-LYJYQEM100005000 或 100001-100500">
+                            <button type="button" class="btn btn-primary" onclick="parseBatchCodes()">
+                                <i class="fas fa-qrcode me-1"></i>解析
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle"></i> 支持格式：
+                            <code>LYJYQEM100004000-LYJYQEM100005000</code>（带前缀码段）或
+                            <code>100001-100500</code>（纯数字范围）或
+                            <code>100001,100002,100003</code>（逗号分隔）
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 已解析的码段显示 -->
+                <div class="col-12">
+                    <div id="parsedCodesDisplay" class="p-4 bg-primary rounded-lg" style="display:none; background: var(--primary-subtle) !important;">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="text-primary font-semibold"><i class="fas fa-check-circle me-1"></i>已解析码段</span>
+                            <button type="button" class="btn btn-danger btn-sm" onclick="clearParsedCodes()">
+                                <i class="fas fa-trash me-1"></i>清空
+                            </button>
+                        </div>
+                        <div id="codesList" class="d-flex flex-wrap gap-2"></div>
+                        <input type="hidden" id="batch_codes" name="batch_codes" value="{{ tx.batch_codes or '' }}">
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="operator" class="form-label">操作人</label>
+                        <input type="text" class="form-control" id="operator" name="operator"
+                               value="{{ tx.operator or '' }}" placeholder="请输入操作人">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="remark" class="form-label">备注</label>
+                        <input type="text" class="form-control" id="remark" name="remark"
+                               value="{{ tx.remark or '' }}" placeholder="请输入备注">
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <i class="fas fa-save me-1"></i>保存修改
+                </button>
+                <a href="{{ url_for('stock_transactions.list') }}" class="btn btn-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ==================== 出库编辑表单（和新增出库页面一致） ==================== -->
+{% elif tx.type == 'stock_out' %}
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" class="needs-validation" id="stockOutForm" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="warehouse_id" class="form-label">出库仓库 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="warehouse_id" name="warehouse_id" required>
+                        <option value="">请选择仓库</option>
+                        {% for w in warehouses %}
+                        <option value="{{ w.id }}" {% if w.id == tx.warehouse_id %}selected{% endif %}>{{ w.name }} ({{ w.code }})</option>
+                        {% endfor %}
+                    </select>
+                    <div class="invalid-feedback">请选择仓库</div>
+                </div>
+
+                <div class="col-md-6">
+                    <label for="product_id" class="form-label">出库商品 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="product_id" name="product_id" required>
+                        <option value="">请选择商品</option>
+                        {% for p in products %}
+                        <option value="{{ p.id }}" {% if p.id == tx.product_id %}selected{% endif %}>{{ p.name }} ({{ p.sku }})</option>
+                        {% endfor %}
+                    </select>
+                    <div class="invalid-feedback">请选择商品</div>
+                </div>
+
+                <div class="col-md-4">
+                    <label for="customer_id" class="form-label">客户</label>
+                    <select class="form-select" id="customer_id" name="customer_id">
+                        <option value="">请选择客户</option>
+                        {% for c in customers %}
+                        <option value="{{ c.id }}" {% if c.id == tx.customer_id %}selected{% endif %}>{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="quantity" class="form-label">出库数量 <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="quantity" name="quantity"
+                           min="1" max="3000" required placeholder="请输入数量" value="{{ tx.quantity }}">
+                    <div class="invalid-feedback">请输入出库数量（1-3000）</div>
+                    <div class="form-text text-muted">单次出库最多3000个</div>
+                </div>
+                <div class="col-md-4">
+                    <label for="reference_no" class="form-label">关联单号</label>
+                    <input type="text" class="form-control" id="reference_no" name="reference_no"
+                           value="{{ tx.reference_no or '' }}" placeholder="如订单号">
+                </div>
+
+                <!-- 防窜货码输入区域 -->
+                <div class="col-12">
+                    <label class="form-label">
+                        <i class="fas fa-barcode me-2"></i>防窜货码（支持扫码或手动输入）
+                    </label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="batch_codes_input"
+                               value="{{ tx.batch_codes or '' }}"
+                               placeholder="扫描条形码或手动输入，如：100001-100500">
+                        <button type="button" class="btn btn-primary" onclick="parseBatchCodes()">
+                            <i class="fas fa-qrcode me-1"></i>解析
+                        </button>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        <i class="fas fa-info-circle"></i> 支持格式：
+                        <code>LYJYQEM100004000-LYJYQEM100005000</code>（带前缀码段）或
+                        <code>100001-100500</code>（纯数字范围）或
+                        <code>100001,100002,100003</code>（逗号分隔）
+                    </small>
+                </div>
+
+                <!-- 已解析的码段显示 -->
+                <div class="col-12">
+                    <div id="parsedCodesDisplay" class="p-3 bg-light rounded" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-primary"><i class="fas fa-check-circle me-1"></i>已解析码段</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearParsedCodes()">
+                                <i class="fas fa-trash me-1"></i>清空
+                            </button>
+                        </div>
+                        <div id="codesList" class="flex-wrap d-flex gap-2"></div>
+                        <input type="hidden" id="batch_codes" name="batch_codes" value="{{ tx.batch_codes or '' }}">
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <label for="operator" class="form-label">操作人</label>
+                    <input type="text" class="form-control" id="operator" name="operator"
+                           value="{{ tx.operator or '' }}" placeholder="请输入操作人">
+                </div>
+                <div class="col-md-6">
+                    <label for="remark" class="form-label">备注</label>
+                    <input type="text" class="form-control" id="remark" name="remark"
+                           value="{{ tx.remark or '' }}" placeholder="请输入备注">
+                </div>
+            </div>
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <i class="fas fa-save me-1"></i>保存修改
+                </button>
+                <a href="{{ url_for('stock_transactions.list') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ==================== 调拨编辑表单（和新增调拨页面一致） ==================== -->
+{% elif tx.type in ['transfer_in', 'transfer_out'] %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title"><i class="fas fa-clipboard-list me-2"></i>修改调拨信息</h5>
+    </div>
+    <div class="card-body">
+        <form id="transferForm" class="needs-validation" novalidate method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="col">
+                    <label for="from_warehouse_id" class="form-label required">调出仓库</label>
+                    <select class="form-select" id="from_warehouse_id" name="from_warehouse_id" required>
+                        <option value="">请选择仓库</option>
+                        {% for w in warehouses %}
+                        <option value="{{ w.id }}" {% if w.id == tx.from_warehouse_id %}selected{% endif %}>{{ w.name }} ({{ w.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col">
+                    <label for="to_warehouse_id" class="form-label required">调入仓库</label>
+                    <select class="form-select" id="to_warehouse_id" name="to_warehouse_id" required>
+                        <option value="">请选择仓库</option>
+                        {% for w in warehouses %}
+                        <option value="{{ w.id }}" {% if w.id == tx.to_warehouse_id %}selected{% endif %}>{{ w.name }} ({{ w.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row mt-4">
+                <div class="col">
+                    <label for="product_id" class="form-label required">调拨商品</label>
+                    <select class="form-select" id="product_id" name="product_id" required>
+                        <option value="">请选择商品</option>
+                        {% for p in products %}
+                        <option value="{{ p.id }}" {% if p.id == tx.product_id %}selected{% endif %}>{{ p.name }} ({{ p.sku }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col">
+                    <label for="quantity" class="form-label required">调拨数量</label>
+                    <input type="number" class="form-control" id="quantity" name="quantity"
+                           min="{{ related_info.total_out_quantity if related_info.stock_out_count > 0 else 1 }}" required placeholder="请输入数量"
+                           value="{{ tx.quantity }}">
+                    <div class="form-text" id="stockInfo">
+                        {% if related_info.stock_out_count > 0 %}
+                        最低不能低于 {{ related_info.total_out_quantity }} 盒
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 防窜货码输入区域 -->
+            <div class="form-row mt-4">
+                <div class="col">
+                    <label class="form-label">
+                        <i class="fas fa-barcode me-2"></i>防窜货码（支持扫码或手动输入）
+                    </label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="batch_codes_input"
+                               value="{{ tx.batch_codes or '' }}"
+                               placeholder="扫描条形码或手动输入，如：100001-100500">
+                        <button type="button" class="btn btn-primary" onclick="parseBatchCodes()">
+                            <i class="fas fa-qrcode me-1"></i>解析
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 已解析的码段显示 -->
+            <div class="form-row mt-3">
+                <div class="col">
+                    <div id="parsedCodesDisplay" class="p-3 bg-light rounded" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-primary"><i class="fas fa-check-circle me-1"></i>已解析码段</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearParsedCodes()">
+                                <i class="fas fa-trash me-1"></i>清空
+                            </button>
+                        </div>
+                        <div id="codesList" class="flex-wrap d-flex gap-2"></div>
+                        <input type="hidden" id="batch_codes" name="batch_codes" value="{{ tx.batch_codes or '' }}">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row mt-4">
+                <div class="col-md-6">
+                    <label for="operator" class="form-label">操作人</label>
+                    <input type="text" class="form-control" id="operator" name="operator"
+                           value="{{ tx.operator or '' }}" placeholder="请输入操作人">
+                </div>
+                <div class="col-md-6">
+                    <label for="remark" class="form-label">备注</label>
+                    <input type="text" class="form-control" id="remark" name="remark"
+                           value="{{ tx.remark or '' }}" placeholder="请输入备注">
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <i class="fas fa-save me-1"></i>保存修改
+                </button>
+                <a href="{{ url_for('stock_transactions.list') }}" class="btn btn-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- 关联交易记录 -->
+{% if related_info.related_transactions %}
+<div class="card shadow mt-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="fas fa-link me-2"></i>关联交易记录</h5>
+    </div>
+    <div class="card-body">
+        <table class="table table-sm table-bordered">
+            <thead>
+                <tr>
+                    <th>单号</th>
+                    <th>类型</th>
+                    <th>数量</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rel in related_info.related_transactions %}
+                <tr>
+                    <td>{{ rel.no }}</td>
+                    <td>
+                        {% if rel.type == '出库' %}
+                            <span class="badge bg-danger">出库</span>
+                        {% elif rel.type == '入库' %}
+                            <span class="badge bg-success">入库</span>
+                        {% else %}
+                            <span class="badge bg-info">调拨</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ rel.qty }}</td>
+                    <td>{{ rel.date }}</td>
+                    <td>
+                        <a href="{{ url_for('stock_transactions.edit', tx_id=rel.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var selectedCodes = [];
+
+// 字符串递增函数
+function incrementString(str) {
+    const numStr = str.replace(/^0+/, '');
+    if (numStr === '') return '1';
+    let result = '';
+    let carry = 1;
+    for (let i = numStr.length - 1; i >= 0; i--) {
+        const digit = parseInt(numStr[i]) + carry;
+        if (digit >= 10) { result = '0' + result; carry = 1; }
+        else { result = digit.toString() + result; carry = 0; }
+    }
+    if (carry > 0) result = '1' + result;
+    const padding = str.length - result.length;
+    if (padding > 0) result = '0'.repeat(padding) + result;
+    return result;
+}
+
+function safeSubtract(a, b) {
+    const strA = String(a), strB = String(b);
+    if (strA.length <= 15 && strB.length <= 15) return parseInt(a) - parseInt(b);
+    let result = '', borrow = 0, i = strA.length - 1, j = strB.length - 1;
+    while (i >= 0 || j >= 0) {
+        const digitA = i >= 0 ? parseInt(strA[i]) : 0;
+        const digitB = j >= 0 ? parseInt(strB[j]) : 0;
+        let diff = digitA - digitB - borrow;
+        if (diff < 0) { diff += 10; borrow = 1; } else { borrow = 0; }
+        result = diff.toString() + result; i--; j--;
+    }
+    return parseInt(result);
+}
+
+function compareNumbers(a, b) {
+    const strA = String(a), strB = String(b);
+    if (strA.length !== strB.length) return strA.length - strB.length;
+    for (let i = 0; i < strA.length; i++) {
+        if (strA[i] !== strB[i]) return strA.charCodeAt(i) - strB.charCodeAt(i);
+    }
+    return 0;
+}
+
+function parseBarcodeContent(barcode) {
+    const rangePattern1 = /^([A-Za-z]+)(\d+)-([A-Za-z]+)(\d+)$/;
+    const match1 = barcode.match(rangePattern1);
+    if (match1 && match1[1] === match1[3]) {
+        if (compareNumbers(match1[4], match1[2]) >= 0) {
+            return { type: 'range', prefix: match1[1], start: match1[2], end: match1[4], count: safeSubtract(match1[4], match1[2]) + 1 };
+        }
+    }
+    const rangePattern2 = /^([A-Za-z]+)(\d+)-\1(\d+)$/;
+    const match2 = barcode.match(rangePattern2);
+    if (match2 && compareNumbers(match2[3], match2[2]) >= 0) {
+        return { type: 'range', prefix: match2[1], start: match2[2], end: match2[3], count: safeSubtract(match2[3], match2[2]) + 1 };
+    }
+    const rangePattern3 = /^(\d+)-(\d+)$/;
+    const match3 = barcode.match(rangePattern3);
+    if (match3 && compareNumbers(match3[2], match3[1]) >= 0) {
+        return { type: 'range', prefix: '', start: match3[1], end: match3[2], count: safeSubtract(match3[2], match3[1]) + 1 };
+    }
+    if (barcode.includes(',')) {
+        const codes = barcode.split(',').map(c => c.trim()).filter(c => c);
+        if (codes.length > 0 && codes.every(c => /^\d+$/.test(c))) return { type: 'multiple', codes: codes };
+    }
+    if (/^\d+$/.test(barcode)) return { type: 'single', codes: [barcode] };
+    return { type: 'unknown' };
+}
+
+function parseBatchCodes() {
+    const input = document.getElementById('batch_codes_input').value.trim();
+    if (!input) { alert('请输入防窜货码'); return; }
+    const result = parseBarcodeContent(input);
+    const displayDiv = document.getElementById('parsedCodesDisplay');
+    const codesList = document.getElementById('codesList');
+    const hiddenInput = document.getElementById('batch_codes');
+    if (result.type === 'range') {
+        const count = result.count;
+        if (count > 10000) {
+            selectedCodes = [result.prefix + result.start + '-' + result.prefix + result.end];
+        } else {
+            const codes = []; let current = result.start;
+            for (let i = 0; i < count; i++) { codes.push(current); current = incrementString(current); }
+            selectedCodes = codes;
+        }
+        updateCodesDisplay();
+        document.getElementById('quantity').value = count;
+        alert('解析成功！码段：' + result.prefix + result.start + '-' + result.prefix + result.end + '，共 ' + count + ' 个码');
+    } else if (result.type === 'single') {
+        selectedCodes = [result.codes[0]];
+        updateCodesDisplay();
+        document.getElementById('quantity').value = 1;
+        alert('解析成功！单个码：' + result.codes[0]);
+    } else if (result.type === 'multiple') {
+        selectedCodes = result.codes;
+        updateCodesDisplay();
+        document.getElementById('quantity').value = result.codes.length;
+        alert('解析成功！' + result.codes.length + ' 个码');
+    } else {
+        alert('无法解析条形码格式，请检查输入！');
+    }
+}
+
+function updateCodesDisplay() {
+    const displayDiv = document.getElementById('parsedCodesDisplay');
+    const codesList = document.getElementById('codesList');
+    const hiddenInput = document.getElementById('batch_codes');
+    codesList.innerHTML = '';
+    if (selectedCodes.length > 10) {
+        const sortedCodes = [...selectedCodes].sort((a, b) => parseInt(a) - parseInt(b));
+        const tag = document.createElement('span');
+        tag.className = 'badge badge-primary';
+        tag.textContent = sortedCodes[0] + '-' + sortedCodes[sortedCodes.length - 1] + ' (' + selectedCodes.length + '个)';
+        codesList.appendChild(tag);
+    } else {
+        selectedCodes.forEach(code => {
+            const tag = document.createElement('span');
+            tag.className = 'badge badge-primary';
+            tag.textContent = code;
+            codesList.appendChild(tag);
+        });
+    }
+    hiddenInput.value = selectedCodes.join(',');
+    displayDiv.style.display = 'block';
+}
+
+function clearParsedCodes() {
+    selectedCodes = [];
+    document.getElementById('parsedCodesDisplay').style.display = 'none';
+    document.getElementById('batch_codes').value = '';
+    document.getElementById('batch_codes_input').value = '';
+}
+
+// 表单提交验证
+var submitting = false;
+(function() {
+    'use strict';
+    var form = document.querySelector('form');
+    if (!form) return;
+
+    form.addEventListener('submit', function(event) {
+        if (submitting) { event.preventDefault(); event.stopPropagation(); return; }
+        submitting = true;
+
+        var quantityInput = document.getElementById('quantity');
+        var batchCodesInput = document.getElementById('batch_codes');
+
+        // HTML5验证
+        if (!form.checkValidity()) {
+            submitting = false;
+            event.preventDefault();
+            event.stopPropagation();
+            form.classList.add('was-validated');
+            return;
+        }
+
+        var quantity = parseInt(quantityInput.value) || 0;
+
+        // 码段必填验证
+        if (!batchCodesInput || !batchCodesInput.value || batchCodesInput.value.trim() === '') {
+            submitting = false;
+            event.preventDefault();
+            event.stopPropagation();
+            alert('请填写防窜货码段！\n\n必须填写完整的码段信息。');
+            return;
+        }
+
+        // 数量一致性验证
+        var codesCount = batchCodesInput.value.split(',').length;
+        if (quantity !== codesCount) {
+            submitting = false;
+            event.preventDefault();
+            event.stopPropagation();
+            alert('数量(' + quantity + ')与防窜货码数量(' + codesCount + ')不一致，请核对后再提交！');
+            return;
+        }
+
+        form.classList.add('was-validated');
+    }, false);
+})();
+
+// 回车解析
+var batchInput = document.getElementById('batch_codes_input');
+if (batchInput) {
+    batchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); parseBatchCodes(); }
+    });
+}
+
+// 选择商品自动填充价格
+var productSelect = document.getElementById('product_id');
+if (productSelect) {
+    productSelect.addEventListener('change', function() {
+        var selectedOption = this.options[this.selectedIndex];
+        var priceInfo = document.getElementById('productPriceInfo');
+        if (this.value && priceInfo) {
+            var costPrice = selectedOption.getAttribute('data-cost-price') || 0;
+            var sellingPrice = selectedOption.getAttribute('data-selling-price') || 0;
+            document.getElementById('productCostPrice').textContent = parseFloat(costPrice).toFixed(2);
+            document.getElementById('productSellingPrice').textContent = parseFloat(sellingPrice).toFixed(2);
+            priceInfo.style.display = 'block';
+            if (parseFloat(costPrice) > 0) document.getElementById('unit_cost').value = parseFloat(costPrice).toFixed(2);
+        } else if (priceInfo) {
+            priceInfo.style.display = 'none';
+        }
+    });
+}
+
+// 数量修改时检查码段一致性
+var quantityInput = document.getElementById('quantity');
+if (quantityInput) {
+    quantityInput.addEventListener('change', function() {
+        var quantity = parseInt(this.value) || 0;
+        var batchCodesInput = document.getElementById('batch_codes');
+        if (batchCodesInput && batchCodesInput.value) {
+            var codesCount = batchCodesInput.value.split(',').length;
+            if (quantity !== codesCount) {
+                this.classList.add('border-warning');
+                alert('警告：数量(' + quantity + ')与防窜货码数量(' + codesCount + ')不一致！');
+            } else {
+                this.classList.remove('border-warning');
+            }
+        }
+    });
+}
+
+// 有效期计算
+function calculateValidity() {
+    var productionDate = document.getElementById('production_date');
+    var expireDate = document.getElementById('expire_date');
+    var preview = document.getElementById('validityPreview');
+    if (!productionDate || !expireDate || !preview) return;
+
+    var prod = new Date(productionDate.value);
+    var exp = new Date(expireDate.value);
+    if (!productionDate.value || !expireDate.value) {
+        preview.textContent = '填写日期后自动计算';
+        preview.className = 'form-control-plaintext text-muted';
+        return;
+    }
+    if (exp <= prod) {
+        preview.textContent = '过期日期必须晚于生产日期';
+        preview.className = 'form-control-plaintext text-danger';
+        return;
+    }
+    var totalDays = Math.ceil((exp - prod) / (1000 * 60 * 60 * 24));
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var daysRemaining = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+    var colorClass = 'text-success', warningIcon = '', remainingText = '';
+    if (daysRemaining <= 0) { colorClass = 'text-dark'; warningIcon = '<i class="fas fa-exclamation-circle me-1"></i>'; remainingText = '已过期 ' + Math.abs(daysRemaining) + ' 天'; }
+    else if (daysRemaining <= 30) { colorClass = 'text-danger'; warningIcon = '<i class="fas fa-exclamation-circle me-1"></i>'; remainingText = '仅剩 ' + daysRemaining + ' 天'; }
+    else if (daysRemaining <= 90) { colorClass = 'text-warning'; warningIcon = '<i class="fas fa-exclamation-triangle me-1"></i>'; remainingText = daysRemaining + ' 天后过期'; }
+    else if (daysRemaining <= 180) { colorClass = 'text-info'; remainingText = daysRemaining + ' 天后过期'; }
+    else { remainingText = daysRemaining + ' 天后过期'; }
+    preview.innerHTML = warningIcon + '有效期：<strong>' + totalDays + '</strong> 天 | 剩余：<strong class="' + colorClass + '">' + remainingText + '</strong>';
+}
+
+var prodDateInput = document.getElementById('production_date');
+var expDateInput = document.getElementById('expire_date');
+if (prodDateInput) prodDateInput.addEventListener('change', calculateValidity);
+if (expDateInput) expDateInput.addEventListener('change', calculateValidity);
+
+// 页面加载时初始化已有码段
+(function() {
+    var batchCodesInput = document.getElementById('batch_codes');
+    var batchCodesRaw = document.getElementById('batch_codes_input');
+    if (batchCodesInput && batchCodesInput.value) {
+        selectedCodes = batchCodesInput.value.split(',');
+        var displayDiv = document.getElementById('parsedCodesDisplay');
+        var codesList = document.getElementById('codesList');
+        if (displayDiv && codesList) {
+            codesList.innerHTML = '';
+            if (selectedCodes.length > 10) {
+                var sortedCodes = [...selectedCodes].sort((a, b) => parseInt(a) - parseInt(b));
+                var tag = document.createElement('span');
+                tag.className = 'badge badge-primary';
+                tag.textContent = sortedCodes[0] + '-' + sortedCodes[sortedCodes.length - 1] + ' (' + selectedCodes.length + '个)';
+                codesList.appendChild(tag);
+            } else {
+                selectedCodes.forEach(function(code) {
+                    var tag = document.createElement('span');
+                    tag.className = 'badge badge-primary';
+                    tag.textContent = code;
+                    codesList.appendChild(tag);
+                });
+            }
+            displayDiv.style.display = 'block';
+        }
+    }
+    // 初始化有效期计算
+    calculateValidity();
+})();
+</script>
+{% endblock %}

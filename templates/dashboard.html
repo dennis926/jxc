@@ -1,0 +1,688 @@
+{% extends "base.html" %}
+
+{% block title %}仪表盘 - {{ site_name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- 顶栏已显示"仪表盘"标题，此处不再重复标题，仅保留欢迎语与时间 -->
+    <div class="dashboard-header">
+        <div>
+            <p class="text-muted mb-0">欢迎使用{{ site_name }}，以下是系统概览</p>
+        </div>
+        <div class="text-muted">
+            <small><i class="fas fa-clock me-1"></i>{{ current_time }}</small>
+        </div>
+    </div>
+
+    <!-- ======== 库存统计卡片 ======== -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card stat-card-primary">
+                <div class="stat-icon">
+                    <i class="fas fa-box"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">商品总数</div>
+                    <div class="stat-value">{{ total_products }}</div>
+                    <div class="stat-trend trend-up">
+                        <i class="fas fa-arrow-up"></i> 全部商品
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card stat-card-success">
+                <div class="stat-icon">
+                    <i class="fas fa-cubes"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">总库存量</div>
+                    <div class="stat-value">{{ total_inventory }}</div>
+                    <div class="stat-trend trend-up">
+                        <i class="fas fa-arrow-up"></i> 健康状态
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card stat-card-warning">
+                <div class="stat-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">低库存预警</div>
+                    <div class="stat-value">{{ low_stock_count }}</div>
+                    <div class="stat-trend trend-down">
+                        <i class="fas fa-arrow-down"></i> 需要关注
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card stat-card-info">
+                <div class="stat-icon">
+                    <i class="fas fa-exchange-alt"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">今日出入库</div>
+                    <div class="stat-value">
+                        <span class="text-success">{{ today_stock_in }}</span>
+                        <span class="text-muted">/</span>
+                        <span class="text-danger">{{ today_stock_out }}</span>
+                    </div>
+                    <div class="stat-trend trend-neutral">
+                        <i class="fas fa-minus"></i> 入库/出库
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======== 财务统计卡片 ======== -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card stat-card-info">
+                <div class="stat-icon">
+                    <i class="fas fa-wallet"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">账户总余额</div>
+                    <div class="stat-value">¥{{ total_balance }}</div>
+                    <div class="stat-trend trend-up">
+                        <i class="fas fa-coins"></i> 可用资金
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card stat-card-warning">
+                <div class="stat-icon">
+                    <i class="fas fa-hand-holding-usd"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">应收款总额</div>
+                    <div class="stat-value">¥{{ total_receivable }}</div>
+                    <div class="stat-trend trend-neutral">
+                        <i class="fas fa-user-tie"></i> 待收回款
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card stat-card-danger">
+                <div class="stat-icon">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">应付款总额</div>
+                    <div class="stat-value">¥{{ total_payable }}</div>
+                    <div class="stat-trend trend-down">
+                        <i class="fas fa-building"></i> 待付货款
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card stat-card-success">
+                <div class="stat-icon">
+                    <i class="fas fa-chart-pie"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">本月收支</div>
+                    <div class="stat-value">
+                        <span class="text-success">+{{ month_income }}</span>
+                        <span class="text-muted">/</span>
+                        <span class="text-danger">-{{ month_expense }}</span>
+                    </div>
+                    <div class="stat-trend trend-neutral">
+                        <i class="fas fa-chart-line"></i> 利润: ¥{{ month_income - month_expense }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 快捷操作 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-bolt me-2"></i>快捷操作
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-6 col-md-3">
+                            <a href="{{ url_for('inventory.stock_in') }}" class="btn btn-success w-100">
+                                <i class="fas fa-download me-1"></i>商品入库
+                            </a>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <a href="{{ url_for('inventory.stock_out') }}" class="btn btn-danger w-100">
+                                <i class="fas fa-upload me-1"></i>商品出库
+                            </a>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <a href="{{ url_for('finance.accounts') }}" class="btn btn-info w-100 text-white">
+                                <i class="fas fa-money-check-alt me-1"></i>账户管理
+                            </a>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <a href="{{ url_for('finance.profit_report') }}" class="btn btn-warning w-100 text-white">
+                                <i class="fas fa-chart-line me-1"></i>财务报表
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图表区域 -->
+    <div class="row mb-4">
+        <!-- 近7天出入库趋势 -->
+        <div class="col-lg-8 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-line me-2"></i>近7天出入库趋势
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <!-- 容器定高，配合 maintainAspectRatio:false 得到稳定可读的图表高度 -->
+                    <div style="height: 280px;">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 仓库库存分布 -->
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-success">
+                        <i class="fas fa-chart-pie me-2"></i>仓库库存分布
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if warehouse_labels %}
+                    <div style="height: 280px;">
+                        <canvas id="warehouseChart"></canvas>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">暂无仓库数据</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 最近出入库记录 -->
+        <div class="col-lg-8 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-info">
+                            <i class="fas fa-history me-2"></i>最近出入库记录
+                        </h6>
+                        <a href="{{ url_for('stock_transactions.list') }}" class="btn btn-sm btn-outline-primary">
+                            查看全部 <i class="fas fa-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if recent_transactions %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="border-0">单号</th>
+                                    <th class="border-0">类型</th>
+                                    <th class="border-0">商品</th>
+                                    <th class="border-0">仓库</th>
+                                    <th class="border-0">数量</th>
+                                    <th class="border-0">时间</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for tx in recent_transactions %}
+                                <tr>
+                                    <td><code class="small">{{ tx.transaction_no }}</code></td>
+                                    <td>
+                                        {% if tx.type == 'stock_in' %}
+                                            <span class="badge bg-success rounded-pill px-3">入库</span>
+                                        {% elif tx.type == 'stock_out' %}
+                                            <span class="badge bg-danger rounded-pill px-3">出库</span>
+                                        {% elif tx.type == 'transfer_in' %}
+                                            <span class="badge bg-info rounded-pill px-3">调入</span>
+                                        {% elif tx.type == 'transfer_out' %}
+                                            <span class="badge bg-warning rounded-pill px-3">调出</span>
+                                        {% elif tx.type == 'adjustment' %}
+                                            <span class="badge bg-secondary rounded-pill px-3">调整</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="fw-medium text-truncate" style="max-width: 200px;" title="{{ tx.product.name if tx.product else '-' }}">{{ tx.product.name if tx.product else '-' }}</div>
+                                        <small class="text-muted">{{ tx.product.sku if tx.product else '' }}</small>
+                                    </td>
+                                    <td class="cell-ellipsis" title="{{ tx.warehouse.name if tx.warehouse else '-' }}">{{ tx.warehouse.name if tx.warehouse else '-' }}</td>
+                                    <td class="fw-bold">{{ tx.quantity }}</td>
+                                    <td style="white-space: nowrap;">
+                                        <small class="text-muted">{{ tx.created_at.strftime('%m-%d %H:%M') if tx.created_at else '-' }}</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">暂无出入库记录</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 低库存预警 + 过期预警 -->
+        <div class="col-lg-4 mb-4">
+            <!-- 低库存预警 -->
+            <div class="card shadow-sm border-left-warning mb-4">
+                <div class="card-header bg-white py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>低库存预警
+                        </h6>
+                        {% if low_stock_count > 0 %}
+                        <span class="badge bg-warning rounded-pill">{{ low_stock_count }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if low_stock_products %}
+                    <div class="alert alert-warning py-2 mb-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        以下商品库存低于预警值
+                    </div>
+                    <div class="low-stock-list">
+                        {% for item in low_stock_products %}
+                        <div class="low-stock-item">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <div class="fw-medium">{{ item.product.name }}</div>
+                                    <small class="text-muted">SKU: {{ item.product.sku }}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-danger">{{ item.total_quantity }}</span>
+                                </div>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-danger" role="progressbar"
+                                     style="width: {{ (item.total_quantity / item.min_stock * 100)|round|int }}%">
+                                </div>
+                            </div>
+                            <small class="text-muted">预警值: {{ item.min_stock }}</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                        <p class="text-success mb-0">库存充足，无预警</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 过期预警 -->
+            <div class="card shadow-sm border-left-danger">
+                <div class="card-header bg-white py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-danger">
+                            <i class="fas fa-clock me-2"></i>过期预警
+                        </h6>
+                        {% if expiring_items %}
+                        <span class="badge bg-danger rounded-pill">{{ expiring_items|length }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if expiring_items %}
+                    <div class="alert alert-danger py-2 mb-3">
+                        <i class="fas fa-exclamation-circle me-1"></i>
+                        {{ expiry_warning_days }}天内即将过期商品
+                    </div>
+                    <div class="expiry-list">
+                        {% for item in expiring_items[:10] %}
+                        <div class="expiry-item mb-3 pb-3 border-bottom">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <div>
+                                    <div class="fw-medium">{{ item.product_name }}</div>
+                                    <small class="text-muted">{{ item.sku }} | {{ item.warehouse_name }}</small>
+                                </div>
+                                <span class="badge {% if item.days_remaining <= 30 %}bg-danger{% elif item.days_remaining <= 90 %}bg-warning{% else %}bg-info{% endif %}">
+                                    {{ item.days_remaining }}天后过期
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar-alt me-1"></i>过期: {{ item.batch.expire_date.strftime('%Y-%m-%d') if item.batch.expire_date else '-' }}
+                                </small>
+                                <span class="badge bg-secondary">{{ item.remaining_quantity }}盒</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% if expiring_items|length > 10 %}
+                        <div class="text-center mt-2">
+                            <small class="text-muted">还有 {{ expiring_items|length - 10 }} 条过期预警...</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                        <p class="text-success mb-0">暂无过期预警</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-container {
+        max-width: 1400px;
+    }
+
+    .dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        padding-bottom: 16px;
+        border-bottom: 2px solid #e9ecef;
+    }
+
+    /* 统计卡片样式 */
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+        border: 1px solid #e9ecef;
+        height: 100%;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+    }
+
+    .stat-card .stat-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16px;
+        font-size: 24px;
+        color: white;
+    }
+
+    .stat-card-primary .stat-icon {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .stat-card-success .stat-icon {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    }
+
+    .stat-card-warning .stat-icon {
+        background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+    }
+
+    .stat-card-info .stat-icon {
+        background: linear-gradient(135deg, #17a2b8 0%, #6610f2 100%);
+    }
+
+    .stat-card-danger .stat-icon {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    }
+
+    .stat-card .stat-content {
+        flex: 1;
+    }
+
+    .stat-card .stat-label {
+        font-size: 13px;
+        color: #6c757d;
+        margin-bottom: 4px;
+        font-weight: 500;
+    }
+
+    .stat-card .stat-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: #2c3e50;
+        line-height: 1.2;
+        margin-bottom: 4px;
+    }
+
+    .stat-card .stat-trend {
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .trend-up { color: #28a745; }
+    .trend-down { color: #dc3545; }
+    .trend-neutral { color: #6c757d; }
+
+    /* 卡片样式优化 */
+    .card {
+        border-radius: 12px;
+        border: none;
+    }
+
+    .card-header {
+        border-radius: 12px 12px 0 0 !important;
+    }
+
+    /* 低库存列表样式 */
+    .low-stock-list {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .low-stock-item {
+        padding: 12px;
+        border-bottom: 1px solid #e9ecef;
+        margin-bottom: 8px;
+    }
+
+    .low-stock-item:last-child {
+        border-bottom: none;
+    }
+
+    /* 过期预警列表样式 */
+    .expiry-list {
+        max-height: 350px;
+        overflow-y: auto;
+    }
+
+    .expiry-item:last-child {
+        border-bottom: none !important;
+    }
+
+    .border-left-danger {
+        border-left: 4px solid #dc3545;
+    }
+
+    /* 表格样式优化 */
+    .table {
+        font-size: 14px;
+    }
+
+    .table thead th {
+        font-weight: 600;
+        color: #495057;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+
+    /* 徽章样式 */
+    .badge.rounded-pill {
+        padding: 6px 12px;
+        font-weight: 500;
+    }
+
+    /* 响应式调整 */
+    @media (max-width: 768px) {
+        .stat-card {
+            margin-bottom: 16px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 24px;
+        }
+
+        .dashboard-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    // 近7天出入库趋势图
+    const trendCtx = document.getElementById('trendChart').getContext('2d');
+    new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: {{ trend_labels | tojson }},
+            datasets: [
+                {
+                    label: '入库',
+                    data: {{ trend_in_data | tojson }},
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    yAxisID: 'y'
+                },
+                {
+                    // 出库量级通常远小于整批入库，单轴会把出库压成一条贴底直线，
+                    // 因此出库单独用右侧轴，两条线才都能看出走势
+                    label: '出库',
+                    data: {{ trend_out_data | tojson }},
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { 
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20
+                    }
+                }
+            },
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    beginAtZero: true,
+                    title: { display: true, text: '入库量', color: '#10b981' },
+                    ticks: { color: '#10b981', precision: 0 },
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                },
+                y1: {
+                    type: 'linear',
+                    position: 'right',
+                    beginAtZero: true,
+                    title: { display: true, text: '出库量', color: '#ef4444' },
+                    ticks: { color: '#ef4444', precision: 0 },
+                    // 右轴不重复画网格线，避免与左轴网格交错造成视觉噪点
+                    grid: { drawOnChartArea: false }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+
+    // 仓库库存分布饼图
+    {% if warehouse_labels %}
+    const warehouseCtx = document.getElementById('warehouseChart').getContext('2d');
+    new Chart(warehouseCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ warehouse_labels | tojson }},
+            datasets: [{
+                data: {{ warehouse_data | tojson }},
+                backgroundColor: [
+                    '#667eea', '#28a745', '#17a2b8', '#ffc107',
+                    '#dc3545', '#6f42c1', '#e83e8c', '#20c997'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { 
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 15
+                    }
+                }
+            },
+            cutout: '60%'
+        }
+    });
+    {% endif %}
+</script>
+{% endblock %}

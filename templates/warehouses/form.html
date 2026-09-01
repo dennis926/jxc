@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}{{ '编辑仓库' if warehouse else '新增仓库' }} - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('warehouses.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" class="needs-validation" novalidate>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="name" class="form-label">仓库名称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="name" name="name"
+                           value="{{ warehouse.name if warehouse else '' }}" required placeholder="请输入仓库名称">
+                    <div class="invalid-feedback">请输入仓库名称</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="code" class="form-label">仓库编码 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="code" name="code"
+                           value="{{ warehouse.code if warehouse else '' }}" required placeholder="请输入仓库编码">
+                    <div class="invalid-feedback">请输入仓库编码</div>
+                </div>
+                <div class="col-12">
+                    <label for="address" class="form-label">仓库地址</label>
+                    <input type="text" class="form-control" id="address" name="address"
+                           value="{{ warehouse.address if warehouse else '' }}" placeholder="请输入仓库地址">
+                </div>
+                <div class="col-md-6">
+                    <label for="contact_person" class="form-label">联系人</label>
+                    <input type="text" class="form-control" id="contact_person" name="contact_person"
+                           value="{{ warehouse.contact_person if warehouse else '' }}" placeholder="请输入联系人">
+                </div>
+                <div class="col-md-6">
+                    <label for="contact_phone" class="form-label">联系电话</label>
+                    <input type="text" class="form-control" id="contact_phone" name="contact_phone"
+                           value="{{ warehouse.contact_phone if warehouse else '' }}" placeholder="请输入联系电话">
+                </div>
+                {% if warehouse %}
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="is_active" name="is_active"
+                               {% if warehouse.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">启用仓库</label>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>保存
+                </button>
+                <a href="{{ url_for('warehouses.list') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+    var forms = document.querySelectorAll('.needs-validation');
+    Array.prototype.slice.call(forms).forEach(function(form) {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,608 @@
+{% extends "base.html" %}
+
+{% block title %}编辑表单 - {{ form.form_name }} - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('form_config.index') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="row">
+    <!-- 左侧：表单基本信息 -->
+    <div class="col-lg-3 mb-4">
+        <div class="card shadow">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-info-circle me-1"></i>基本信息</h6>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="basicInfoForm">
+                    <div class="mb-3">
+                        <label class="form-label">表单代码</label>
+                        <input type="text" class="form-control" value="{{ form.form_code }}" readonly>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="form_name" class="form-label">表单名称</label>
+                        <input type="text" class="form-control" id="form_name" name="form_name"
+                               value="{{ form.form_name }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">描述</label>
+                        <textarea class="form-control" id="description" name="description" rows="3">{{ form.description or '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="company_name" class="form-label">公司名称</label>
+                        <input type="text" class="form-control" id="company_name" name="company_name"
+                               value="{{ form.company_name or '' }}" placeholder="用于随货同行单等打印表头">
+                        <div class="form-text">将显示在随货同行单等打印文档的标题位置</div>
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="is_active" name="is_active"
+                               {% if form.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">启用此表单</label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-save me-1"></i>保存基本信息
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 中间：字段管理 -->
+    <div class="col-lg-5">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="fas fa-columns me-1"></i>字段配置</h6>
+                {% if all_fields_added %}
+                <button type="button" class="btn btn-secondary btn-sm" disabled title="当前表单字段已全部添加">
+                    <i class="fas fa-check-circle me-1"></i>已全部添加
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addFieldModal">
+                    <i class="fas fa-plus me-1"></i>添加字段
+                </button>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if fields %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm" id="fieldsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 40px;">排序</th>
+                                <th>字段名称</th>
+                                <th>类型</th>
+                                <th style="width: 60px;">显示</th>
+                                <th style="width: 60px;">必填</th>
+                                <th style="width: 70px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fieldsBody">
+                            {% for field in fields %}
+                            <tr data-field-id="{{ field.id }}">
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        {% if not loop.first %}
+                                        <button type="button" class="btn btn-outline-secondary move-up-btn" style="padding: 0 4px;">
+                                            <i class="fas fa-chevron-up" style="font-size: 0.7em;"></i>
+                                        </button>
+                                        {% endif %}
+                                        {% if not loop.last %}
+                                        <button type="button" class="btn btn-outline-secondary move-down-btn" style="padding: 0 4px;">
+                                            <i class="fas fa-chevron-down" style="font-size: 0.7em;"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <strong>{{ field.field_name }}</strong>
+                                    <br><small class="text-muted">{{ field.field_code }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ field.field_type }}</span>
+                                </td>
+                                <td>
+                                    {% if field.is_visible %}
+                                    <span class="badge bg-success">是</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">否</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if field.is_required %}
+                                    <span class="badge bg-danger">是</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">否</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-primary edit-field-btn"
+                                                data-field-id="{{ field.id }}" title="编辑">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger delete-field-btn"
+                                                data-field-id="{{ field.id }}" title="删除">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-columns fa-3x mb-3"></i>
+                    <p>暂无字段配置</p>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addFieldModal">
+                        <i class="fas fa-plus me-1"></i>添加第一个字段
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：实时预览 -->
+    <div class="col-lg-4">
+        <div class="card shadow" id="previewCard">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="fas fa-eye me-1"></i>实时预览</h6>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-secondary active" id="previewFormBtn" onclick="switchPreviewMode('form')">
+                        <i class="fas fa-file-alt me-1"></i>表单
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="previewTableBtn" onclick="switchPreviewMode('table')">
+                        <i class="fas fa-table me-1"></i>表格
+                    </button>
+                </div>
+            </div>
+            <div class="card-body" id="previewBody">
+                <!-- 预览内容由JS动态渲染 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加字段模态框 -->
+<div class="modal fade" id="addFieldModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">添加字段</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addFieldForm">
+                    <div class="mb-3">
+                        <label for="add_field_select" class="form-label">选择字段 <span class="text-danger">*</span></label>
+                        <select class="form-select" id="add_field_select" required>
+                            <option value="">-- 请选择要添加的字段 --</option>
+                        </select>
+                        <div class="form-text">选择数据库中定义的字段，字段代码和类型由系统自动匹配</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="add_field_code" class="form-label">字段代码</label>
+                        <input type="text" class="form-control" id="add_field_code" name="field_code" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="add_field_type" class="form-label">字段类型</label>
+                        <input type="text" class="form-control" id="add_field_type_display" readonly>
+                        <input type="hidden" id="add_field_type" name="field_type">
+                    </div>
+                    <div class="mb-3">
+                        <label for="add_field_name" class="form-label">字段名称（表头） <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="add_field_name" name="field_name" required>
+                        <div class="form-text">可自定义显示在表头上的名称</div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="add_is_required" name="is_required">
+                        <label class="form-check-label" for="add_is_required">必填项</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveAddFieldBtn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑字段模态框 -->
+<div class="modal fade" id="editFieldModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑字段</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editFieldForm">
+                    <input type="hidden" id="edit_field_id" name="field_id">
+                    <div class="mb-3">
+                        <label class="form-label">字段代码</label>
+                        <input type="text" class="form-control" id="edit_field_code" readonly>
+                        <div class="form-text">字段代码由系统定义，不可修改</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">字段类型</label>
+                        <input type="text" class="form-control" id="edit_field_type_display" readonly>
+                        <input type="hidden" id="edit_field_type" name="field_type">
+                        <div class="form-text">字段类型由系统定义，不可修改</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_field_name" class="form-label">字段名称（表头） <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="edit_field_name" name="field_name" required>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="edit_is_visible" name="is_visible">
+                        <label class="form-check-label" for="edit_is_visible">显示该字段</label>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="edit_is_required" name="is_required">
+                        <label class="form-check-label" for="edit_is_required">必填项</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveEditFieldBtn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const formId = {{ form.id }};
+let fieldsData = {{ fields_json_str|safe }};
+let previewMode = 'form'; // 'form' or 'table'
+const csrfToken = '{{ csrf_token() }}';
+const availableFields = {{ available_fields_json|safe }};
+const typeLabelMap = {text: '文本', number: '数字', date: '日期', select: '下拉选择', textarea: '多行文本'};
+
+document.addEventListener('DOMContentLoaded', function() {
+    initAddFieldModal();
+    initEditFieldModal();
+    initDeleteFieldButtons();
+    initMoveButtons();
+    renderPreview();
+});
+
+// ========== 预览功能 ==========
+
+function switchPreviewMode(mode) {
+    previewMode = mode;
+    document.getElementById('previewFormBtn').classList.toggle('active', mode === 'form');
+    document.getElementById('previewTableBtn').classList.toggle('active', mode === 'table');
+    renderPreview();
+}
+
+function renderPreview() {
+    const visibleFields = fieldsData.filter(f => f.is_visible).sort((a, b) => a.sort_order - b.sort_order);
+    const formName = document.getElementById('form_name') ? document.getElementById('form_name').value : '{{ form.form_name }}';
+    
+    if (visibleFields.length === 0) {
+        document.getElementById('previewBody').innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-eye-slash fa-2x mb-2"></i><p>暂无可预览的字段</p><small>请添加字段并设置为"显示"</small></div>';
+        return;
+    }
+    
+    if (previewMode === 'form') {
+        renderFormPreview(visibleFields, formName);
+    } else {
+        renderTablePreview(visibleFields, formName);
+    }
+}
+
+function renderFormPreview(fields, formName) {
+    let html = '<div class="preview-form">';
+    html += '<h6 class="border-bottom pb-2 mb-3">' + escapeHtml(formName) + '</h6>';
+    
+    fields.forEach(function(field) {
+        const requiredMark = field.is_required ? '<span class="text-danger">*</span>' : '';
+        const label = '<label class="form-label">' + escapeHtml(field.field_name) + ' ' + requiredMark + '</label>';
+        let input = '';
+        
+        switch (field.field_type) {
+            case 'text':
+                input = '<input type="text" class="form-control form-control-sm" placeholder="' + escapeHtml(field.default_value || '请输入' + field.field_name) + '" disabled>';
+                break;
+            case 'number':
+                input = '<input type="number" class="form-control form-control-sm" placeholder="' + escapeHtml(field.default_value || '0') + '" disabled>';
+                break;
+            case 'date':
+                input = '<input type="date" class="form-control form-control-sm" disabled>';
+                break;
+            case 'select':
+                let options = '';
+                if (field.options) {
+                    try {
+                        const opts = JSON.parse(field.options);
+                        opts.forEach(function(opt) {
+                            options += '<option>' + escapeHtml(opt.label || opt.value) + '</option>';
+                        });
+                    } catch(e) {
+                        options += '<option>选项解析错误</option>';
+                    }
+                } else {
+                    options = '<option>请选择</option><option>选项1</option><option>选项2</option>';
+                }
+                input = '<select class="form-select form-select-sm" disabled>' + options + '</select>';
+                break;
+            case 'textarea':
+                input = '<textarea class="form-control form-control-sm" rows="2" placeholder="' + escapeHtml(field.default_value || '请输入' + field.field_name) + '" disabled></textarea>';
+                break;
+            default:
+                input = '<input type="text" class="form-control form-control-sm" disabled>';
+        }
+        
+        html += '<div class="mb-2">' + label + input + '</div>';
+    });
+    
+    html += '<button type="button" class="btn btn-primary btn-sm mt-2" disabled><i class="fas fa-check me-1"></i>提交</button>';
+    html += '</div>';
+    
+    document.getElementById('previewBody').innerHTML = html;
+}
+
+function renderTablePreview(fields, formName) {
+    let html = '<div class="preview-table">';
+    html += '<h6 class="border-bottom pb-2 mb-3">' + escapeHtml(formName) + '</h6>';
+    html += '<div class="table-responsive"><table class="table table-bordered table-sm" style="font-size: 0.8rem;">';
+    
+    // 表头
+    html += '<thead class="table-light"><tr>';
+    html += '<th style="width: 30px;">#</th>';
+    fields.forEach(function(field) {
+        const required = field.is_required ? ' <span class="text-danger">*</span>' : '';
+        html += '<th style="white-space: nowrap;">' + escapeHtml(field.field_name) + required + '</th>';
+    });
+    html += '</tr></thead>';
+    
+    // 示例数据行
+    html += '<tbody>';
+    for (let row = 1; row <= 2; row++) {
+        html += '<tr>';
+        html += '<td>' + row + '</td>';
+        fields.forEach(function(field) {
+            let sample = '';
+            switch (field.field_type) {
+                case 'text': sample = field.default_value || '示例文本'; break;
+                case 'number': sample = field.default_value || '0'; break;
+                case 'date': sample = '2026-01-01'; break;
+                case 'select':
+                    if (field.options) {
+                        try {
+                            const opts = JSON.parse(field.options);
+                            sample = opts.length > 0 ? (opts[0].label || opts[0].value) : '-';
+                        } catch(e) { sample = '-'; }
+                    } else { sample = '选项1'; }
+                    break;
+                case 'textarea': sample = field.default_value || '备注内容...'; break;
+                default: sample = '-';
+            }
+            html += '<td>' + escapeHtml(sample) + '</td>';
+        });
+        html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+    
+    // 字段类型图例
+    html += '<div class="mt-2"><small class="text-muted">字段类型：';
+    const typeMap = {text: '文本', number: '数字', date: '日期', select: '下拉', textarea: '多行'};
+    const usedTypes = [...new Set(fields.map(f => f.field_type))];
+    usedTypes.forEach(function(t, i) {
+        if (i > 0) html += '、';
+        html += '<span class="badge bg-info">' + (typeMap[t] || t) + '</span>';
+    });
+    html += '</small></div>';
+    
+    html += '</div>';
+    
+    document.getElementById('previewBody').innerHTML = html;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ========== 字段操作功能 ==========
+
+function initAddFieldModal() {
+    const addModal = new bootstrap.Modal(document.getElementById('addFieldModal'));
+    const saveBtn = document.getElementById('saveAddFieldBtn');
+    const fieldSelect = document.getElementById('add_field_select');
+    
+    // 填充可用字段下拉列表（排除已添加的字段）
+    const addedCodes = fieldsData.map(f => f.field_code);
+    fieldSelect.innerHTML = '<option value="">-- 请选择要添加的字段 --</option>';
+    Object.keys(availableFields).forEach(function(code) {
+        if (!addedCodes.includes(code)) {
+            const info = availableFields[code];
+            const option = document.createElement('option');
+            option.value = code;
+            option.textContent = info.name + ' (' + code + ') - ' + (typeLabelMap[info.type] || info.type);
+            fieldSelect.appendChild(option);
+        }
+    });
+    
+    // 选择字段时自动填充代码、类型和默认名称
+    fieldSelect.addEventListener('change', function() {
+        const code = this.value;
+        if (code && availableFields[code]) {
+            const info = availableFields[code];
+            document.getElementById('add_field_code').value = code;
+            document.getElementById('add_field_type').value = info.type;
+            document.getElementById('add_field_type_display').value = typeLabelMap[info.type] || info.type;
+            document.getElementById('add_field_name').value = info.name;
+        } else {
+            document.getElementById('add_field_code').value = '';
+            document.getElementById('add_field_type').value = '';
+            document.getElementById('add_field_type_display').value = '';
+            document.getElementById('add_field_name').value = '';
+        }
+    });
+    
+    saveBtn.addEventListener('click', function() {
+        const code = fieldSelect.value;
+        if (!code) {
+            alert('请选择要添加的字段');
+            return;
+        }
+        
+        const formData = new FormData(document.getElementById('addFieldForm'));
+        formData.append('csrf_token', csrfToken);
+        
+        fetch(`/form-config/${formId}/fields/add`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addModal.hide();
+                location.reload();
+            } else {
+                alert(data.message || '添加失败');
+            }
+        })
+        .catch(error => {
+            alert('请求失败，请重试');
+            console.error(error);
+        });
+    });
+}
+
+function initEditFieldModal() {
+    const editModal = new bootstrap.Modal(document.getElementById('editFieldModal'));
+    const saveBtn = document.getElementById('saveEditFieldBtn');
+    
+    document.querySelectorAll('.edit-field-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const fieldId = this.getAttribute('data-field-id');
+            const field = fieldsData.find(f => f.id == fieldId);
+            
+            if (field) {
+                document.getElementById('edit_field_id').value = field.id;
+                document.getElementById('edit_field_code').value = field.field_code;
+                document.getElementById('edit_field_type').value = field.field_type;
+                document.getElementById('edit_field_type_display').value = typeLabelMap[field.field_type] || field.field_type;
+                document.getElementById('edit_field_name').value = field.field_name;
+                document.getElementById('edit_is_visible').checked = field.is_visible;
+                document.getElementById('edit_is_required').checked = field.is_required;
+                
+                editModal.show();
+            }
+        });
+    });
+    
+    saveBtn.addEventListener('click', function() {
+        const fieldId = document.getElementById('edit_field_id').value;
+        const formData = new FormData(document.getElementById('editFieldForm'));
+        formData.append('csrf_token', csrfToken);
+        
+        fetch(`/form-config/${formId}/fields/${fieldId}/update`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                editModal.hide();
+                location.reload();
+            } else {
+                alert(data.message || '更新失败');
+            }
+        })
+        .catch(error => {
+            alert('请求失败，请重试');
+            console.error(error);
+        });
+    });
+}
+
+function initDeleteFieldButtons() {
+    document.querySelectorAll('.delete-field-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('确定要删除该字段吗？')) {
+                return;
+            }
+            
+            const fieldId = this.getAttribute('data-field-id');
+            
+            fetch(`/form-config/${formId}/fields/${fieldId}/delete`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('删除失败');
+                }
+            })
+            .catch(error => {
+                alert('请求失败，请重试');
+                console.error(error);
+            });
+        });
+    });
+}
+
+function initMoveButtons() {
+    document.querySelectorAll('.move-up-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const row = this.closest('tr');
+            const prevRow = row.previousElementSibling;
+            if (prevRow) {
+                row.parentNode.insertBefore(row, prevRow);
+                saveReorder();
+            }
+        });
+    });
+    
+    document.querySelectorAll('.move-down-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const row = this.closest('tr');
+            const nextRow = row.nextElementSibling;
+            if (nextRow && nextRow.tagName === 'TR') {
+                row.parentNode.insertBefore(nextRow, row);
+                saveReorder();
+            }
+        });
+    });
+}
+
+function saveReorder() {
+    const fieldIds = Array.from(document.querySelectorAll('#fieldsBody tr')).map(tr => 
+        parseInt(tr.getAttribute('data-field-id'))
+    );
+    
+    fetch(`/form-config/${formId}/fields/reorder`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ field_ids: fieldIds })
+    });
+}
+</script>
+{% endblock %}

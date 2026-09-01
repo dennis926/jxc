@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}系统配置 - 进销存管理系统{% endblock %}
+
+{% block extra_css %}
+<style>
+.config-card {
+    transition: all 0.3s ease;
+}
+.config-card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+.logo-preview {
+    max-width: 200px;
+    max-height: 80px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 5px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card config-card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-cog me-2"></i>基本设置</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('system_config.index') }}">
+                    <!-- 网站名称 -->
+                    <div class="mb-3">
+                        <label class="form-label">网站名称</label>
+                        <input type="text" class="form-control" name="site_name" 
+                               value="{{ configs.get('site_name', {}).get('value', '进销存管理系统') }}">
+                        <div class="form-text">显示在浏览器标签页和系统标题处</div>
+                    </div>
+
+                    <!-- 版权信息 -->
+                    <div class="mb-3">
+                        <label class="form-label">版权信息</label>
+                        <input type="text" class="form-control" name="copyright" 
+                               value="{{ configs.get('copyright', {}).get('value', '') }}">
+                    </div>
+
+                    <!-- 每页显示条数 -->
+                    <div class="mb-3">
+                        <label class="form-label">每页显示条数</label>
+                        <select class="form-select" name="items_per_page">
+                            <option value="10" {% if configs.get('items_per_page', {}).get('value') == '10' %}selected{% endif %}>10条</option>
+                            <option value="20" {% if configs.get('items_per_page', {}).get('value') == '20' %}selected{% endif %}>20条</option>
+                            <option value="50" {% if configs.get('items_per_page', {}).get('value') == '50' %}selected{% endif %}>50条</option>
+                            <option value="100" {% if configs.get('items_per_page', {}).get('value') == '100' %}selected{% endif %}>100条</option>
+                        </select>
+                    </div>
+
+                    <!-- 功能开关 -->
+                    <div class="mb-3">
+                        <label class="form-label">功能设置</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="enable_email_notify" value="true"
+                                   id="enable_email_notify" {% if configs.get('enable_email_notify', {}).get('value') == 'true' %}checked{% endif %}>
+                            <label class="form-check-label" for="enable_email_notify">
+                                启用邮件通知
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="low_stock_alert" value="true"
+                                   id="low_stock_alert" {% if configs.get('low_stock_alert', {}).get('value') == 'true' %}checked{% endif %}>
+                            <label class="form-check-label" for="low_stock_alert">
+                                库存预警（低于最低库存时提醒）
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>保存配置
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="if(confirm('确定要重置为默认配置吗？')) { document.getElementById('resetForm').submit(); }">
+                            <i class="fas fa-undo me-1"></i>重置默认
+                        </button>
+                    </div>
+                </form>
+                <form id="resetForm" method="POST" action="{{ url_for('system_config.reset') }}" style="display: none;"></form>
+            </div>
+        </div>
+
+        <!-- 联系方式设置 -->
+        <div class="card config-card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-address-book me-2"></i>联系方式</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('system_config.index') }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">联系邮箱</label>
+                            <input type="email" class="form-control" name="contact_email" 
+                                   value="{{ configs.get('contact_email', {}).get('value', '') }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">联系电话</label>
+                            <input type="text" class="form-control" name="contact_phone" 
+                                   value="{{ configs.get('contact_phone', {}).get('value', '') }}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">联系地址</label>
+                        <input type="text" class="form-control" name="contact_address" 
+                               value="{{ configs.get('contact_address', {}).get('value', '') }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>保存配置
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- LOGO设置 -->
+        <div class="card config-card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-image me-2"></i>网站LOGO</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('system_config.upload_logo') }}" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">当前LOGO</label>
+                        <div class="mb-2">
+                            {% if configs.get('site_logo', {}).get('value') %}
+                            <img src="{{ configs.get('site_logo', {}).get('value') }}" alt="LOGO" class="logo-preview">
+                            {% else %}
+                            <div class="logo-preview d-flex align-items-center justify-content-center text-muted" style="width: 200px; height: 80px;">
+                                暂无LOGO
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">上传新LOGO</label>
+                        <input type="file" class="form-control" name="logo" accept="image/png,image/jpeg,image/gif">
+                        <div class="form-text">支持 PNG、JPG、GIF 格式，建议尺寸 200x80 像素</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload me-1"></i>上传LOGO
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 系统信息 -->
+        <div class="card config-card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>系统信息</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <td class="text-muted">系统版本</td>
+                            <td>v1.0.0</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">框架版本</td>
+                            <td>Flask 2.x</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">数据库</td>
+                            <td>SQLite</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Python版本</td>
+                            <td>3.10+</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

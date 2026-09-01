@@ -1,0 +1,53 @@
+[Unit]
+Description=HONS 进销存管理系统
+After=network.target
+Documentation=https://gitee.com/den7hon/jxc
+
+[Service]
+# 用户和组（根据实际环境修改）
+User=www
+Group=www
+
+# 工作目录（修改为实际路径）
+WorkingDirectory=/www/wwwroot/your-domain.com
+
+# 启动命令
+#
+# --preload 必须保留：create_app() 只在主进程执行一次，worker 由 fork 产生，
+#   APScheduler 的后台线程不随 fork 复制，因此定时备份只注册一份。
+#   去掉它则每个 worker 各注册一份任务，同一秒触发会算出相同的备份中间
+#   文件名并互相覆盖、截断，产生残缺的 zip 和 "No such file or directory"
+#   失败记录。若确实不能使用 --preload，请改为 --workers 1，
+#   或给非主 worker 设置 RUN_SCHEDULER=0。
+ExecStart=/www/wwwroot/your-domain.com/venv/bin/gunicorn \
+    --preload \
+    --workers 2 \
+    --threads 2 \
+    --worker-class gthread \
+    --max-requests 500 \
+    --timeout 60 \
+    --bind 127.0.0.1:5001 \
+    --access-logfile /www/wwwroot/your-domain.com/logs/access.log \
+    --error-logfile /www/wwwroot/your-domain.com/logs/error.log \
+    --capture-output \
+    wsgi:application
+
+# 重启策略
+Restart=always
+RestartSec=5
+
+# 环境变量
+Environment="PATH=/www/wwwroot/your-domain.com/venv/bin"
+Environment="PYTHONPATH=/www/wwwroot/your-domain.com"
+
+# 安全设置
+PrivateTmp=true
+NoNewPrivileges=true
+
+# 标准输出和错误输出
+StandardOutput=append:/www/wwwroot/your-domain.com/logs/app.log
+StandardError=append:/www/wwwroot/your-domain.com/logs/error.log
+
+[Install]
+# 开机自启
+WantedBy=multi-user.target

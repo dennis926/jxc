@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}编辑客户 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('customers.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form id="customerForm" method="POST">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">客户名称 <span class="text-danger">*</span></label>
+                    <input type="text" name="name" class="form-control" value="{{ customer.name }}" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">联系人</label>
+                    <input type="text" name="contact" class="form-control" value="{{ customer.contact or '' }}">
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">联系电话</label>
+                    <input type="text" name="phone" class="form-control" value="{{ customer.phone or '' }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">收货地址</label>
+                    <input type="text" name="address" class="form-control" value="{{ customer.address or '' }}">
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">电子邮箱</label>
+                    <input type="email" name="email" class="form-control" value="{{ customer.email or '' }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">税号</label>
+                    <input type="text" name="tax_no" class="form-control" value="{{ customer.tax_no or '' }}">
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">开户行</label>
+                    <input type="text" name="bank" class="form-control" value="{{ customer.bank or '' }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">账号</label>
+                    <input type="text" name="account_no" class="form-control" value="{{ customer.account_no or '' }}">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">备注</label>
+                <textarea name="remark" class="form-control" rows="3">{{ customer.remark or '' }}</textarea>
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>保存
+                </button>
+                <a href="{{ url_for('customers.list') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#customerForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        $.ajax({
+            url: '{{ url_for("customers.edit", id=customer.id) }}',
+            method: 'POST',
+            data: $(this).serialize(),
+            success: function(res) {
+                if (res.success) {
+                    alert('更新成功');
+                    window.location.href = '{{ url_for("customers.list") }}';
+                } else {
+                    alert('更新失败：' + res.message);
+                }
+            },
+            error: function() {
+                alert('更新失败');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

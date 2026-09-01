@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}平台API配置 - 进销存管理系统{% endblock %}
+
+{% block extra_css %}
+<style>
+.platform-card {
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent;
+}
+.platform-card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+.platform-card.active {
+    border-left-color: var(--platform-color);
+}
+.platform-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: white;
+}
+.platform-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+}
+.platform-body.show {
+    max-height: 800px;
+}
+.config-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.config-status.configured {
+    background-color: #28a745;
+}
+.config-status.not-configured {
+    background-color: #dc3545;
+}
+.field-password-wrapper {
+    position: relative;
+}
+.field-password-wrapper .toggle-pwd {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: #6c757d;
+}
+.field-password-wrapper .toggle-pwd:hover {
+    color: #495057;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('system_config.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i>返回系统配置
+    </a>
+</div>
+
+<!-- 说明提示 -->
+<div class="alert alert-info mb-4">
+    <i class="fas fa-info-circle me-2"></i>
+    配置各电商平台的API参数后，系统可自动同步订单数据。请先在对应平台开放平台注册应用并获取相关密钥。
+    <strong>所有密钥信息加密存储在数据库中，不会明文展示。</strong>
+</div>
+
+<!-- 平台配置卡片 -->
+{% for code, platform in platforms.items() %}
+<div class="card platform-card mb-3" id="card-{{ code }}" style="--platform-color: {{ platform.color }};">
+    <!-- 平台头部 - 可点击展开/收起 -->
+    <div class="card-header d-flex justify-content-between align-items-center py-3"
+         style="cursor: pointer;" onclick="togglePlatform('{{ code }}')">
+        <div class="d-flex align-items-center">
+            <div class="platform-icon me-3" style="background-color: {{ platform.color }};">
+                <i class="{{ platform.icon }}"></i>
+            </div>
+            <div>
+                <h6 class="mb-0 fw-bold">{{ platform.name }}</h6>
+                <small class="text-muted">
+                    {% set configured_count = 0 %}
+                    {% set total_required = 0 %}
+                    {% for field in platform.fields %}
+                        {% if field.type != 'boolean' %}
+                            {% set total_required = total_required + 1 %}
+                            {% if configs.get(field.key, '') %}
+                                {% set configured_count = configured_count + 1 %}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                    <span class="config-status {% if configured_count == total_required and total_required > 0 %}configured{% else %}not-configured{% endif %}"></span>
+                    {% if configured_count == total_required and total_required > 0 %}
+                        <span class="text-success">已配置</span>
+                    {% elif configured_count > 0 %}
+                        <span class="text-warning">部分配置 ({{ configured_count }}/{{ total_required }})</span>
+                    {% else %}
+                        <span class="text-muted">未配置</span>
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <a href="{{ platform.doc_url }}" target="_blank" class="btn btn-outline-info btn-sm"
+               onclick="event.stopPropagation();" title="查看API文档">
+                <i class="fas fa-external-link-alt"></i>
+            </a>
+            <i class="fas fa-chevron-down transition-icon" id="icon-{{ code }}"
+               style="transition: transform 0.3s;"></i>
+        </div>
+    </div>
+
+    <!-- 平台配置表单 -->
+    <div class="platform-body" id="body-{{ code }}">
+        <div class="card-body border-top">
+            <form method="POST" action="{{ url_for('system_config.save_platform_api') }}" id="form-{{ code }}">
+                <input type="hidden" name="platform_code" value="{{ code }}">
+
+                <div class="row">
+                    {% for field in platform.fields %}
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">
+                            {{ field.label }}
+                            {% if field.type != 'boolean' %}
+                                <span class="text-danger">*</span>
+                            {% endif %}
+                        </label>
+
+                        {% if field.type == 'password' %}
+                        <div class="field-password-wrapper">
+                            <input type="password" class="form-control" name="{{ field.key }}"
+                                   value="{{ configs.get(field.key, '') }}"
+                                   placeholder="{{ field.placeholder }}">
+                            <span class="toggle-pwd" onclick="togglePassword(this)">
+                                <i class="fas fa-eye"></i>
+                            </span>
+                        </div>
+                        {% elif field.type == 'boolean' %}
+                        <div class="form-check form-switch mt-1">
+                            <input class="form-check-input" type="checkbox" name="{{ field.key }}"
+                                   value="true" id="{{ field.key }}"
+                                   {% if configs.get(field.key, '') == 'true' %}checked{% endif %}>
+                            <label class="form-check-label" for="{{ field.key }}">{{ field.desc }}</label>
+                        </div>
+                        {% else %}
+                        <input type="text" class="form-control" name="{{ field.key }}"
+                               value="{{ configs.get(field.key, '') }}"
+                               placeholder="{{ field.placeholder }}">
+                        {% endif %}
+
+                        {% if field.type != 'boolean' %}
+                        <div class="form-text">{{ field.desc }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="d-flex gap-2 mt-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>保存配置
+                    </button>
+                    <button type="button" class="btn btn-outline-success" onclick="testConnection('{{ code }}')">
+                        <i class="fas fa-vial me-1"></i>测试连接
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- 使用说明 -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-book me-2"></i>配置指南</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for code, platform in platforms.items() %}
+            <div class="col-md-6 mb-3">
+                <h6><i class="{{ platform.icon }} me-2" style="color: {{ platform.color }};"></i>{{ platform.name }}</h6>
+                <ol class="text-muted small mb-0">
+                    <li>访问 <a href="{{ platform.doc_url }}" target="_blank">{{ platform.name }}开放平台</a> 注册开发者账号</li>
+                    <li>创建应用，获取 App Key / Client ID 和 App Secret / Client Secret</li>
+                    <li>配置回调地址（Callback URL）为您的系统地址</li>
+                    <li>完成OAuth授权，获取 Access Token / Session</li>
+                    <li>将以上参数填入上方配置表单并保存</li>
+                </ol>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 展开/收起平台配置
+    function togglePlatform(code) {
+        const body = document.getElementById('body-' + code);
+        const icon = document.getElementById('icon-' + code);
+        const card = document.getElementById('card-' + code);
+
+        body.classList.toggle('show');
+        icon.style.transform = body.classList.contains('show') ? 'rotate(180deg)' : '';
+        card.classList.toggle('active');
+    }
+
+    // 密码显示/隐藏切换
+    function togglePassword(el) {
+        const input = el.parentElement.querySelector('input');
+        const icon = el.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+
+    // 测试API连接
+    function testConnection(platformCode) {
+        const btn = event.target.closest('button');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>测试中...';
+        btn.disabled = true;
+
+        fetch('/system-config/platform-api/test/' + platformCode, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('✅ ' + data.message);
+            } else {
+                alert('❌ ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('❌ 测试请求失败: ' + error.message);
+        })
+        .finally(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        });
+    }
+
+    // 页面加载时，如果有已配置的平台则自动展开第一个
+    document.addEventListener('DOMContentLoaded', function() {
+        const cards = document.querySelectorAll('.platform-card');
+        for (const card of cards) {
+            const status = card.querySelector('.config-status');
+            if (status && status.classList.contains('configured')) {
+                const code = card.id.replace('card-', '');
+                togglePlatform(code);
+                break;
+            }
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}付款 - 财务模块 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('finance.payables') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+{% if payable %}
+<div class="card shadow mb-4">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="fas fa-file-invoice me-2"></i>应付单信息</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <p><strong>单号：</strong>{{ payable.transaction_no }}</p>
+            </div>
+            <div class="col-md-4">
+                <p><strong>供应商：</strong>{{ payable.supplier_name }}</p>
+            </div>
+            <div class="col-md-4">
+                <p><strong>联系人：</strong>{{ payable.supplier_contact or '-' }}</p>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-4">
+                <p><strong>应付金额：</strong><span class="text-danger h5">¥{{ payable.amount }}</span></p>
+            </div>
+            <div class="col-md-4">
+                <p><strong>已付金额：</strong><span class="text-success">¥{{ payable.paid_amount }}</span></p>
+            </div>
+            <div class="col-md-4">
+                <p><strong>待付金额：</strong><span class="text-warning h5">¥{{ payable.pending_amount }}</span></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-money-bill me-2"></i>付款信息</h5>
+    </div>
+    <div class="card-body">
+        <form id="payForm" method="POST">
+            <input type="hidden" name="payable_id" value="{{ payable.id }}">
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">付款金额 <span class="text-danger">*</span></label>
+                    <input type="number" name="pay_amount" id="payAmount" class="form-control" 
+                           step="0.01" min="0.01" max="{{ payable.pending_amount }}" 
+                           value="{{ payable.pending_amount }}" required>
+                    <div class="form-text">待付金额: ¥{{ payable.pending_amount }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">付款账户 <span class="text-danger">*</span></label>
+                    <select name="account_id" id="accountSelect" class="form-select" required onchange="checkBalance()">
+                        <option value="">请选择账户</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.id }}" data-balance="{{ account.current_balance }}">{{ account.name }} (余额: ¥{{ account.current_balance }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">付款方式</label>
+                    <select name="payment_method" class="form-select">
+                        <option value="">请选择</option>
+                        <option value="cash">现金</option>
+                        <option value="bank">银行转账</option>
+                        <option value="card">刷卡</option>
+                        <option value="alipay">支付宝</option>
+                        <option value="wechat">微信</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">备注</label>
+                <textarea name="remark" class="form-control" rows="3" placeholder="请输入备注信息"></textarea>
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-check me-1"></i>确认付款
+                </button>
+                <a href="{{ url_for('finance.payables') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    未找到应付记录
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function checkBalance() {
+    const accountSelect = document.getElementById('accountSelect');
+    const selectedOption = accountSelect.options[accountSelect.selectedIndex];
+    const balance = parseFloat(selectedOption.dataset.balance || 0);
+    const payAmount = parseFloat(document.getElementById('payAmount').value || 0);
+    
+    if (balance < payAmount) {
+        alert('警告：账户余额不足！当前余额: ¥' + balance);
+    }
+}
+
+$(document).ready(function() {
+    $('#payForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const amount = parseFloat($('#payAmount').val());
+        const maxAmount = {{ payable.pending_amount if payable else 0 }};
+        const accountSelect = document.getElementById('accountSelect');
+        const selectedOption = accountSelect.options[accountSelect.selectedIndex];
+        const balance = parseFloat(selectedOption.dataset.balance || 0);
+        
+        if (amount > maxAmount) {
+            alert('付款金额不能超过待付金额');
+            return;
+        }
+        
+        if (balance < amount) {
+            if (!confirm('账户余额不足！当前余额: ¥' + balance + '，是否继续？')) {
+                return;
+            }
+        }
+        
+        $.ajax({
+            url: '{{ url_for("finance.pay_amount") }}',
+            method: 'POST',
+            data: $(this).serialize(),
+            success: function(res) {
+                if (res.success) {
+                    alert('付款成功');
+                    window.location.href = '{{ url_for("finance.payables") }}';
+                } else {
+                    alert('付款失败：' + res.message);
+                }
+            },
+            error: function() {
+                alert('付款失败');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

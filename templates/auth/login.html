@@ -1,0 +1,489 @@
+{% extends "base.html" %}
+
+{% block title %}登录 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="login-wrapper">
+    <div class="login-container">
+        <!-- 品牌区域 -->
+        <div class="login-brand">
+            <div class="brand-content">
+                {% if site_logo %}
+                <div class="brand-icon">
+                    <img src="{{ site_logo }}" alt="LOGO">
+                </div>
+                {% else %}
+                <div class="brand-icon">
+                    <i class="fas fa-warehouse"></i>
+                </div>
+                {% endif %}
+                <h1 class="brand-title">{{ site_name if site_name else 'AIJXC' }}</h1>
+                <p class="brand-subtitle">智能进销存管理系统</p>
+                
+                <!-- 底部4个功能项并排 -->
+                <div class="brand-features">
+                    <div class="feature-item">
+                        <i class="fas fa-box"></i>
+                        <span>商品管理</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-warehouse"></i>
+                        <span>库存管理</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-chart-line"></i>
+                        <span>数据报表</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>安全可靠</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 登录表单区域 -->
+        <div class="login-form-wrapper">
+            <div class="login-card">
+                <div class="login-header">
+                    <h2 class="login-title">欢迎回来</h2>
+                    <p class="login-desc">请登录您的账号以继续</p>
+                </div>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="alert-custom alert-{{ messages[0][0] }}">
+                    <i class="fas fa-{% if messages[0][0] == 'danger' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+                    <span>{{ messages[0][1] }}</span>
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                <form method="POST" action="{{ url_for('auth.login') }}" class="login-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="form-group-custom">
+                        <label class="form-label-custom">
+                            <i class="fas fa-user"></i>
+                            用户名
+                        </label>
+                        <input type="text" name="username" class="form-input" 
+                               placeholder="请输入用户名" required autofocus>
+                    </div>
+
+                    <div class="form-group-custom">
+                        <label class="form-label-custom">
+                            <i class="fas fa-lock"></i>
+                            密码
+                        </label>
+                        <div class="password-wrapper">
+                            <input type="password" name="password" id="password" 
+                                   class="form-input" placeholder="请输入密码" required>
+                            <button type="button" class="password-toggle" onclick="togglePassword()">
+                                <i class="fas fa-eye" id="toggleIcon"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-submit">
+                        <span>登 录</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </form>
+
+                <div class="login-footer-custom">
+                    <p>© {{ current_year }} {{ site_name if site_name else 'AIJXC 进销存管理系统' }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* 重置登录页基础样式 */
+body {
+    overflow: hidden;
+}
+
+/* 登录页面容器 */
+.login-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+/* 登录容器 - 去掉背景方框 */
+.login-container {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    width: 100%;
+    max-width: 1000px;
+    min-height: 560px;
+    animation: slideUp 0.6s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 品牌区域 */
+.login-brand {
+    flex: 1;
+    padding: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.brand-content {
+    text-align: center;
+    color: white;
+}
+
+/* LOGO放大居中 - 去掉背景 */
+.brand-icon {
+    width: 160px;
+    height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 32px;
+    font-size: 72px;
+}
+
+.brand-icon img {
+    max-height: 140px;
+    max-width: 140px;
+}
+
+/* 标题往下移 */
+.brand-title {
+    font-size: 42px;
+    font-weight: 700;
+    margin: 0 0 12px;
+    letter-spacing: 2px;
+}
+
+.brand-subtitle {
+    font-size: 18px;
+    opacity: 0.95;
+    margin: 0 0 60px;
+}
+
+/* 底部4项并排 */
+.brand-features {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.feature-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 12px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    font-size: 14px;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s;
+}
+
+.feature-item:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-4px);
+}
+
+.feature-item i {
+    font-size: 24px;
+}
+
+/* 登录表单 */
+.login-form-wrapper {
+    flex: 1;
+    padding: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 360px;
+    background: white;
+    border-radius: 24px;
+    padding: 40px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.login-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 8px;
+}
+
+.login-desc {
+    font-size: 14px;
+    color: #64748b;
+    margin: 0;
+}
+
+/* 提示框 */
+.alert-custom {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    font-size: 14px;
+}
+
+.alert-custom.alert-danger {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.alert-custom.alert-success {
+    background: #f0fdf4;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+}
+
+/* 表单 */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.form-group-custom {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-label-custom {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.form-label-custom i {
+    color: #667eea;
+}
+
+.form-input {
+    width: 100%;
+    height: 48px;
+    padding: 0 16px;
+    font-size: 14px;
+    color: #1e293b;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    transition: all 0.3s;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+}
+
+.form-input::placeholder {
+    color: #94a3b8;
+}
+
+/* 密码框 */
+.password-wrapper {
+    position: relative;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 4px;
+    transition: color 0.3s;
+}
+
+.password-toggle:hover {
+    color: #667eea;
+}
+
+/* 提交按钮 */
+.btn-submit {
+    width: 100%;
+    height: 52px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s;
+    margin-top: 8px;
+}
+
+.btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px -5px rgba(102, 126, 234, 0.5);
+}
+
+.btn-submit:active {
+    transform: translateY(0);
+}
+
+.btn-submit i {
+    transition: transform 0.3s;
+}
+
+.btn-submit:hover i {
+    transform: translateX(4px);
+}
+
+/* 页脚 */
+.login-footer-custom {
+    text-align: center;
+    margin-top: 32px;
+}
+
+.login-footer-custom p {
+    font-size: 12px;
+    color: #94a3b8;
+    margin: 0;
+}
+
+/* 隐藏原有元素 */
+.sidebar, .top-header {
+    display: none !important;
+}
+
+.main-content {
+    margin-left: 0 !important;
+}
+
+/* 响应式 */
+@media (max-width: 900px) {
+    .login-container {
+        flex-direction: column;
+        max-width: 420px;
+        min-height: auto;
+    }
+    
+    .login-brand {
+        padding: 32px 24px;
+    }
+    
+    .brand-features {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    
+    .brand-icon {
+        width: 100px;
+        height: 100px;
+        font-size: 40px;
+    }
+    
+    .brand-icon img {
+        max-height: 80px;
+        max-width: 80px;
+    }
+    
+    .brand-title {
+        font-size: 32px;
+    }
+    
+    .login-form-wrapper {
+        padding: 24px;
+    }
+    
+    .login-card {
+        padding: 32px 24px;
+    }
+}
+
+@media (max-width: 480px) {
+    .login-wrapper {
+        padding: 16px;
+    }
+    
+    .login-brand {
+        padding: 24px 16px;
+    }
+    
+    .brand-features {
+        display: none;
+    }
+    
+    .brand-subtitle {
+        margin-bottom: 24px;
+    }
+    
+    .login-form-wrapper {
+        padding: 16px;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function togglePassword() {
+    const passwordInput = document.getElementById('password');
+    const toggleIcon = document.getElementById('toggleIcon');
+    
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleIcon.classList.remove('fa-eye');
+        toggleIcon.classList.add('fa-eye-slash');
+    } else {
+        passwordInput.type = 'password';
+        toggleIcon.classList.remove('fa-eye-slash');
+        toggleIcon.classList.add('fa-eye');
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}数据导入 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-file-import me-2"></i>数据导入</h5>
+    </div>
+    <div class="card-body">
+        <!-- 导入类型选择 -->
+        <div class="mb-4">
+            <label class="form-label fw-bold">选择导入类型</label>
+            <div class="row">
+                {% for item in template_types %}
+                <div class="col-md-4 col-lg-2 mb-3">
+                    <div class="form-check card p-3 h-100">
+                        <input class="form-check-input" type="radio" name="import_type" id="type_{{ item.type }}" value="{{ item.type }}">
+                        <label class="form-check-label w-100" for="type_{{ item.type }}">
+                            <div class="text-center">
+                                <i class="fas {% if item.type == 'products' %}fa-box{% elif item.type == 'warehouses' %}fa-warehouse{% elif item.type == 'suppliers' %}fa-truck{% elif item.type == 'inventory' %}fa-cubes{% elif item.type == 'purchase_orders' %}fa-shopping-cart{% else %}fa-exchange-alt{% endif %} fa-2x mb-2 text-primary"></i>
+                                <div>{{ item.name }}</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 模板下载 -->
+        <div class="mb-4">
+            <label class="form-label fw-bold">下载导入模板</label>
+            <div class="row">
+                {% for item in template_types %}
+                <div class="col-auto mb-2">
+                    <a href="{{ url_for('data_import.download_template', template_type=item.type) }}" class="btn btn-outline-primary btn-sm" id="download_{{ item.type }}">
+                        <i class="fas fa-download me-1"></i>{{ item.name }}模板
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 文件上传 -->
+        <div class="mb-4">
+            <label class="form-label fw-bold">上传文件</label>
+            <form id="uploadForm" enctype="multipart/form-data" method="POST">
+                <input type="hidden" name="template_type" id="template_type">
+                <input type="hidden" id="hasImported" value="false">
+                <div class="row">
+                    <div class="col-md-8">
+                        <input class="form-control" type="file" id="fileInput" name="file" accept=".xlsx,.xls">
+                        <div class="form-text">支持 .xlsx 和 .xls 格式的Excel文件</div>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="button" class="btn btn-info me-2" id="previewBtn">
+                            <i class="fas fa-eye me-1"></i>预览数据
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="importBtn" disabled>
+                            <i class="fas fa-upload me-1"></i>确认导入
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- 预览区域 -->
+        <div id="previewArea" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0"><i class="fas fa-table me-2"></i>数据预览</h6>
+                <span class="badge bg-info" id="previewCount"></span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" id="previewTable">
+                    <thead id="previewHead"></thead>
+                    <tbody id="previewBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 导入说明 -->
+        <div class="mt-4">
+            <h6><i class="fas fa-info-circle me-2"></i>导入说明</h6>
+            <div class="alert alert-info">
+                <ul class="mb-0">
+                    <li>请先下载对应类型的模板文件，按照模板格式填写数据</li>
+                    <li>带 <strong>*</strong> 标记的列为必填项</li>
+                    <li>商品编码、仓库编码等关键字段如果已存在，将更新对应数据</li>
+                    <li>建议先预览数据确认无误后再进行导入</li>
+                    <li>大批量数据导入可能需要较长时间，请耐心等待</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    let selectedType = null;
+
+    // 导入类型选择
+    $('input[name="import_type"]').change(function() {
+        selectedType = $(this).val();
+        $('#template_type').val(selectedType);
+        // 切换类型时重置导入状态
+        $('#hasImported').val('false');
+        $('#previewArea').hide();
+        
+        // 高亮选中项
+        $('input[name="import_type"]').each(function() {
+            $(this).closest('.form-check').removeClass('border-primary').addClass('border-light');
+        });
+        $(this).closest('.form-check').removeClass('border-light').addClass('border-primary');
+    });
+
+    // 文件选择后启用导入按钮
+    $('#fileInput').change(function() {
+        // 重新选择文件时重置导入状态
+        $('#hasImported').val('false');
+        $('#previewArea').hide();
+
+        if ($(this).val() && selectedType) {
+            $('#importBtn').prop('disabled', false);
+        } else {
+            $('#importBtn').prop('disabled', true);
+        }
+    });
+
+    // 预览数据
+    $('#previewBtn').click(function() {
+        if (!selectedType) {
+            alert('请先选择导入类型');
+            return;
+        }
+
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files.length) {
+            alert('请选择要上传的文件');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('template_type', selectedType);
+
+        $.ajax({
+            url: '{{ url_for("data_import.preview") }}',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            success: function(response) {
+                if (response.error) {
+                    alert(response.error);
+                    return;
+                }
+
+                // 显示预览区域
+                $('#previewArea').show();
+                $('#previewCount').text('共 ' + response.total_rows + ' 行数据');
+
+                // 填充表头
+                let headHtml = '<tr>';
+                response.headers.forEach(function(header) {
+                    headHtml += '<th>' + header + '</th>';
+                });
+                headHtml += '</tr>';
+                $('#previewHead').html(headHtml);
+
+                // 填充数据
+                let bodyHtml = '';
+                response.data.forEach(function(row) {
+                    bodyHtml += '<tr>';
+                    row.forEach(function(cell) {
+                        bodyHtml += '<td>' + cell + '</td>';
+                    });
+                    bodyHtml += '</tr>';
+                });
+                $('#previewBody').html(bodyHtml);
+            },
+            error: function(xhr) {
+                const response = xhr.responseJSON;
+                if (response && response.error) {
+                    alert(response.error);
+                } else {
+                    alert('预览失败，请检查文件格式');
+                }
+            }
+        });
+    });
+
+    // 导入表单提交
+    $('#uploadForm').submit(function(e) {
+        e.preventDefault();
+
+        if (!selectedType) {
+            alert('请先选择导入类型');
+            return;
+        }
+
+        if (!$('#fileInput').val()) {
+            alert('请选择要上传的文件');
+            return;
+        }
+
+        // 检查是否已经导入过（预览区域有数据说明可能已导入）
+        if ($('#previewArea').is(':visible') && $('#hasImported').val() === 'true') {
+            if (!confirm('您已经导入过一次数据，确定要再次导入吗？重复导入可能会覆盖已有数据。')) {
+                return;
+            }
+        }
+
+        if (!confirm('确定要导入数据吗？此操作可能会修改现有数据。')) {
+            return;
+        }
+
+        const formData = new FormData(this);
+
+        $.ajax({
+            url: '{{ url_for("data_import.upload") }}',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            success: function(response) {
+                if (response.success) {
+                    // 标记已导入
+                    $('#hasImported').val('true');
+
+                    // 构建结果提示
+                    let msg = '✅ 导入完成！\n\n';
+                    msg += '成功导入：' + response.success_count + ' 条\n';
+                    if (response.error_count > 0) {
+                        msg += '导入失败：' + response.error_count + ' 条\n';
+                        if (response.errors && response.errors.length > 0) {
+                            msg += '\n失败详情：\n';
+                            response.errors.forEach(function(err) {
+                                msg += '  • ' + err + '\n';
+                            });
+                        }
+                    }
+                    alert(msg);
+
+                    // 清空预览区域和文件选择
+                    $('#previewArea').hide();
+                    $('#fileInput').val('');
+                    $('#importBtn').prop('disabled', true);
+                } else {
+                    alert(response.error || '导入失败，请稍后重试');
+                }
+            },
+            error: function(xhr) {
+                const response = xhr.responseJSON;
+                if (response && response.error) {
+                    alert('❌ ' + response.error);
+                } else {
+                    alert('导入失败，请稍后重试');
+                }
+            },
+            complete: function() {
+                // 恢复按钮状态
+                $('#importBtn').prop('disabled', false).html('<i class="fas fa-upload me-1"></i>确认导入');
+            }
+        });
+
+        // 显示加载提示
+        $('#importBtn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>导入中...');
+    });
+});
+</script>
+{% endblock %}

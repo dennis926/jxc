@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}账户管理 - 财务模块 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('finance.add_account') }}" class="btn btn-primary">
+        <i class="fas fa-plus me-1"></i>添加账户
+    </a>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon primary">
+                <i class="fas fa-wallet"></i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">{{ accounts|length }}</div>
+                <div class="stat-label">账户总数</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon success">
+                <i class="fas fa-money-bill-wave"></i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value text-success">
+                    ¥{{ accounts|selectattr('current_balance')|map(attribute='current_balance')|sum|round(2) }}
+                </div>
+                <div class="stat-label">总余额</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon info">
+                <i class="fas fa-credit-card"></i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">
+                    {{ accounts|selectattr('type', 'equalto', 'bank')|list|length }}
+                </div>
+                <div class="stat-label">银行账户</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 账户列表 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title">账户列表</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>账户名称</th>
+                        <th>账户编码</th>
+                        <th>类型</th>
+                        <th>账号</th>
+                        <th>期初余额</th>
+                        <th>当前余额</th>
+                        <th class="text-right">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for account in accounts %}
+                    <tr>
+                        <td><strong>{{ account.name }}</strong></td>
+                        <td><code>{{ account.code or '-' }}</code></td>
+                        <td>
+                            {% if account.type == 'cash' %}
+                                <span class="badge badge-success">现金</span>
+                            {% elif account.type == 'bank' %}
+                                <span class="badge badge-primary">银行</span>
+                            {% elif account.type == 'card' %}
+                                <span class="badge badge-info">信用卡</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted">{{ account.account_no or '-' }}</td>
+                        <td>¥{{ account.opening_balance }}</td>
+                        <td>
+                            <strong class="{% if account.current_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                ¥{{ account.current_balance }}
+                            </strong>
+                        </td>
+                        <td>
+                            <div class="table-actions">
+                                <a href="{{ url_for('finance.edit_account', id=account.id) }}" class="btn btn-sm btn-primary" title="编辑">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button class="btn btn-sm btn-danger" onclick="deleteAccount({{ account.id }}, '{{ account.name }}')" title="删除">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7">
+                            <div class="empty-state">
+                                <div class="empty-icon">
+                                    <i class="fas fa-university"></i>
+                                </div>
+                                <div class="empty-title">暂无账户</div>
+                                <div class="empty-description">点击右上角"添加账户"按钮创建第一个账户</div>
+                                <a href="{{ url_for('finance.add_account') }}" class="btn btn-primary mt-3">
+                                    <i class="fas fa-plus me-1"></i>添加账户
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function deleteAccount(id, name) {
+    if (confirm(`确定要删除账户"${name}"吗？`)) {
+        $.ajax({
+            url: `/finance/accounts/delete/${id}`,
+            method: 'POST',
+            success: function(res) {
+                if (res.success) {
+                    alert('删除成功');
+                    location.reload();
+                } else {
+                    alert('删除失败：' + res.message);
+                }
+            }
+        });
+    }
+}
+</script>
+{% endblock %}

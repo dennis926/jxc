@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}对账结算 - 财务模块 - 进销存管理系统{% endblock %}
+
+{% block content %}
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-calendar me-2"></i>本期结算汇总 ({{ month_start }} 至 {{ month_end }})</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">本期应收</h6>
+                                <h3 class="mb-0">¥{{ period_receivable }}</h3>
+                                <small>新增应收款</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">本期收款</h6>
+                                <h3 class="mb-0">¥{{ period_collect }}</h3>
+                                <small>已收款金额</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-dark">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">净应收</h6>
+                                <h3 class="mb-0">¥{{ net_receivable }}</h3>
+                                <small>本期未收金额</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">账户余额</h6>
+                                <h3 class="mb-0">¥{{ total_balance }}</h3>
+                                <small>所有账户合计</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>应付汇总</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">本期应付</h6>
+                                <h3 class="mb-0">¥{{ period_payable }}</h3>
+                                <small>新增应付款</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">本期付款</h6>
+                                <h3 class="mb-0">¥{{ period_pay }}</h3>
+                                <small>已付款金额</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-dark">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">净应付</h6>
+                                <h3 class="mb-0">¥{{ net_payable }}</h3>
+                                <small>本期未付金额</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-secondary text-white">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">资金缺口</h6>
+                                <h3 class="mb-0">¥{{ net_payable - total_balance }}</h3>
+                                <small>需筹集资金</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>快速操作</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.accounts') }}" class="btn btn-outline-primary btn-lg w-100 mb-2">
+                            <i class="fas fa-university me-2"></i>账户管理
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.transactions') }}" class="btn btn-outline-success btn-lg w-100 mb-2">
+                            <i class="fas fa-money-bill-wave me-2"></i>收支记录
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.receivables') }}" class="btn btn-outline-warning btn-lg w-100 mb-2">
+                            <i class="fas fa-hand-holding-usd me-2"></i>应收管理
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.payables') }}" class="btn btn-outline-danger btn-lg w-100 mb-2">
+                            <i class="fas fa-file-invoice-dollar me-2"></i>应付管理
+                        </a>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.profit_report') }}" class="btn btn-outline-info btn-lg w-100 mb-2">
+                            <i class="fas fa-chart-line me-2"></i>利润表
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.receivable_detail') }}" class="btn btn-outline-secondary btn-lg w-100 mb-2">
+                            <i class="fas fa-list-alt me-2"></i>应收明细表
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.payable_detail') }}" class="btn btn-outline-secondary btn-lg w-100 mb-2">
+                            <i class="fas fa-list-alt me-2"></i>应付明细表
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.balance_report') }}" class="btn btn-outline-secondary btn-lg w-100 mb-2">
+                            <i class="fas fa-balance-scale me-2"></i>资产负债表
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}添加批次 - 批次管理 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('batches.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form id="batchForm" method="POST">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">商品 <span class="text-danger">*</span></label>
+                    <select name="product_id" id="productSelect" class="form-select" required>
+                        <option value="">请选择商品</option>
+                        {% for p in products %}
+                        <option value="{{ p.id }}" data-price="{{ p.cost_price }}">{{ p.name }} ({{ p.sku }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">仓库 <span class="text-danger">*</span></label>
+                    <select name="warehouse_id" class="form-select" required>
+                        <option value="">请选择仓库</option>
+                        {% for w in warehouses %}
+                        <option value="{{ w.id }}">{{ w.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">供应商</label>
+                    <select name="supplier_id" class="form-select">
+                        <option value="">无</option>
+                        {% for s in suppliers %}
+                        <option value="{{ s.id }}">{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">成本价</label>
+                    <input type="number" name="cost_price" id="costPrice" class="form-control" step="0.01" placeholder="从商品成本价自动填充">
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label">条形码输入（支持手动输入或扫码）</label>
+                <div class="input-group">
+                    <input type="text" id="barcodeInput" class="form-control" placeholder="扫描条形码或手动输入，如：LYJYQEM100004000-LYJYQEM100005000">
+                    <button type="button" class="btn btn-primary" onclick="parseBarcode()">
+                        <i class="fas fa-qrcode"></i> 解析
+                    </button>
+                </div>
+                <small class="text-muted d-block mt-1">
+                    <i class="fas fa-info-circle"></i> 支持格式：
+                    <code>LYJYQEM100004000-LYJYQEM100005000</code>（码段范围）或 
+                    <code>100001-100500</code>（纯数字范围）或 
+                    <code>100001,100002,100003</code>（逗号分隔的单个码）
+                </small>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">码段起始 <span class="text-danger">*</span></label>
+                    <input type="number" name="code_start" id="codeStart" class="form-control" required placeholder="例如：100001">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">码段结束 <span class="text-danger">*</span></label>
+                    <input type="number" name="code_end" id="codeEnd" class="form-control" required placeholder="例如：100500">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">入库数量</label>
+                    <input type="text" id="quantityPreview" class="form-control" readonly placeholder="系统自动计算">
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">生产日期</label>
+                    <input type="date" name="production_date" class="form-control"
+                           onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">有效期至</label>
+                    <input type="date" name="expire_date" class="form-control"
+                           onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">备注</label>
+                <textarea name="remark" class="form-control" rows="3" placeholder="可选填备注信息"></textarea>
+            </div>
+
+            <div class="text-end">
+                <a href="{{ url_for('batches.list') }}" class="btn btn-secondary">取消</a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>保存
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#productSelect').change(function() {
+        const price = $(this).find(':selected').data('price');
+        if (price) {
+            $('#costPrice').val(price);
+        }
+    });
+
+    $('input[name="code_start"], input[name="code_end"]').change(function() {
+        updateQuantity();
+    });
+
+    $('#barcodeInput').keydown(function(e) {
+        if (e.key === 'Enter') {
+            parseBarcode();
+        }
+    });
+});
+
+function updateQuantity() {
+    const start = parseInt($('input[name="code_start"]').val()) || 0;
+    const end = parseInt($('input[name="code_end"]').val()) || 0;
+    if (end >= start && start > 0) {
+        $('#quantityPreview').val(end - start + 1);
+    } else {
+        $('#quantityPreview').val('');
+    }
+}
+
+function parseBarcode() {
+    const barcode = $('#barcodeInput').val().trim();
+    
+    if (!barcode) {
+        alert('请输入条形码内容');
+        return;
+    }
+
+    const result = parseBarcodeContent(barcode);
+    
+    if (result.type === 'range') {
+        $('#codeStart').val(result.start);
+        $('#codeEnd').val(result.end);
+        updateQuantity();
+        alert(`解析成功！码段：${result.start}-${result.end}，共 ${result.count} 个码`);
+    } else if (result.type === 'single') {
+        $('#codeStart').val(result.codes[0]);
+        $('#codeEnd').val(result.codes[0]);
+        updateQuantity();
+        alert(`解析成功！单个码：${result.codes[0]}`);
+    } else if (result.type === 'multiple') {
+        const minCode = Math.min(...result.codes);
+        const maxCode = Math.max(...result.codes);
+        $('#codeStart').val(minCode);
+        $('#codeEnd').val(maxCode);
+        updateQuantity();
+        alert(`解析成功！${result.codes.length} 个码，范围：${minCode}-${maxCode}`);
+    } else {
+        alert('无法解析条形码格式，请检查输入');
+    }
+}
+
+function parseBarcodeContent(barcode) {
+    // 格式1: LYJYQEM100004000-LYJYQEM100005000
+    const rangePattern1 = /^([A-Za-z]+)(\d+)-\1(\d+)$/;
+    const match1 = barcode.match(rangePattern1);
+    
+    if (match1) {
+        const prefix = match1[1];
+        const start = parseInt(match1[2]);
+        const end = parseInt(match1[3]);
+        return {
+            type: 'range',
+            prefix: prefix,
+            start: start,
+            end: end,
+            count: end - start + 1
+        };
+    }
+
+    // 格式2: 100001-100500 (纯数字范围)
+    const rangePattern2 = /^(\d+)-(\d+)$/;
+    const match2 = barcode.match(rangePattern2);
+    
+    if (match2) {
+        const start = parseInt(match2[1]);
+        const end = parseInt(match2[2]);
+        return {
+            type: 'range',
+            prefix: '',
+            start: start,
+            end: end,
+            count: end - start + 1
+        };
+    }
+
+    // 格式3: 逗号分隔的多个码
+    if (barcode.includes(',')) {
+        const codes = barcode.split(',').map(c => c.trim()).filter(c => c).map(c => parseInt(c));
+        if (codes.length > 0 && !codes.includes(NaN)) {
+            return {
+                type: 'multiple',
+                codes: codes
+            };
+        }
+    }
+
+    // 格式4: 单个码
+    const singleCode = parseInt(barcode);
+    if (!isNaN(singleCode)) {
+        return {
+            type: 'single',
+            codes: [singleCode]
+        };
+    }
+
+    return { type: 'unknown' };
+}
+
+$('#batchForm').submit(function(e) {
+    e.preventDefault();
+    
+    const start = parseInt($('input[name="code_start"]').val()) || 0;
+    const end = parseInt($('input[name="code_end"]').val()) || 0;
+    
+    if (end < start) {
+        alert('结束码必须大于起始码');
+        return;
+    }
+
+    $.ajax({
+        url: '{{ url_for("batches.add") }}',
+        method: 'POST',
+        data: $(this).serialize(),
+        success: function(res) {
+            if (res.success) {
+                alert('保存成功');
+                location.href = '{{ url_for("batches.list") }}';
+            } else {
+                alert('保存失败：' + res.message);
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

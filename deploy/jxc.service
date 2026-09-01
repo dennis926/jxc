@@ -1,0 +1,54 @@
+[Unit]
+Description=HONS 进销存管理系统 (jxc.hons.fun)
+Documentation=https://gitee.com/den7hon/jxc
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root/.hermes/profiles/hons/workspace/jxc
+
+# gunicorn 只监听回环地址，公网访问由 nginx 反代处理
+#
+# 关于 --preload：
+#   开启后 create_app() 只在主进程执行一次，worker 由 fork 产生，
+#   APScheduler 的后台线程不会随 fork 复制，因此定时备份只会注册一份。
+#   若不使用 --preload，请改为 --workers 1，或给非主 worker 设置
+#   RUN_SCHEDULER=0，否则每个 worker 都会注册定时任务，
+#   同一时刻备份会被执行多次（备份历史出现重复记录）。
+#
+# 注意：--preload 与 --max-requests 的 worker 回收仍可共存，
+#   回收后的新 worker 同样由主进程 fork，不会重复注册任务。
+ExecStart=/root/.hermes/profiles/hons/workspace/jxc/venv/bin/gunicorn \
+    --preload \
+    --workers 2 \
+    --threads 2 \
+    --worker-class gthread \
+    --max-requests 500 \
+    --max-requests-jitter 50 \
+    --timeout 60 \
+    --graceful-timeout 30 \
+    --bind 127.0.0.1:5001 \
+    --access-logfile /root/.hermes/profiles/hons/workspace/jxc/logs/access.log \
+    --error-logfile /root/.hermes/profiles/hons/workspace/jxc/logs/error.log \
+    --capture-output \
+    wsgi:application
+
+ExecReload=/bin/kill -s HUP $MAINPID
+KillSignal=SIGTERM
+Restart=always
+RestartSec=5
+
+# 显式设置 PATH，避免宿主机全局 NODE_ENV 等变量干扰
+Environment="PATH=/root/.hermes/profiles/hons/workspace/jxc/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/root/.hermes/profiles/hons/workspace/jxc"
+Environment="PYTHONUNBUFFERED=1"
+Environment="FLASK_ENV=production"
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

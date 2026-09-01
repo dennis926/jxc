@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+
+{% block title %}采购单列表 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('purchase_orders.export', status=status, search=search) }}" class="btn btn-success">
+            <i class="fas fa-file-excel me-1"></i>导出Excel
+        </a>
+        <a href="{{ url_for('purchase_orders.create') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>新建采购单
+        </a>
+    </div>
+</div>
+
+<!-- 搜索和筛选 -->
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <select name="status" class="form-select">
+                    <option value="">全部状态</option>
+                    {% for val, label in status_options %}
+                    <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="search" class="form-control" placeholder="搜索采购单号或供应商..."
+                       value="{{ search }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-outline-primary">
+                    <i class="fas fa-search me-1"></i>搜索
+                </button>
+                <a href="{{ url_for('purchase_orders.list') }}" class="btn btn-outline-secondary">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 采购单列表 -->
+<div class="card shadow">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th class="sortable" data-sort="po_no">
+                            采购单号
+                            <i class="fas fa-sort{% if sort == 'po_no' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th>供应商</th>
+                        <th>入库仓库</th>
+                        <th>采购商品</th>
+                        <th class="sortable" data-sort="total_amount">
+                            总金额
+                            <i class="fas fa-sort{% if sort == 'total_amount' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-sort="status">
+                            状态
+                            <i class="fas fa-sort{% if sort == 'status' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-sort="created_at">
+                            创建时间
+                            <i class="fas fa-sort{% if sort == 'created_at' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr class="order-row" data-order-id="{{ order.id }}">
+                        <td>
+                            <strong>{{ order.po_no }}</strong>
+                            {% if order.items|length > 1 %}
+                            <button class="btn btn-link btn-sm p-0 ms-1 toggle-products" data-order-id="{{ order.id }}" title="展开/收起">
+                                <i class="fas fa-chevron-down toggle-icon-{{ order.id }}"></i>
+                                <span class="text-muted small">({{ order.items|length }}种商品)</span>
+                            </button>
+                            {% endif %}
+                        </td>
+                        <td>{{ order.supplier.name if order.supplier else '-' }}</td>
+                        <td>{{ order.warehouse.name if order.warehouse else '-' }}</td>
+                        <td class="products-cell" data-order-id="{{ order.id }}">
+                            {% if order.items %}
+                                {% set first_item = order.items[0] %}
+                                <div class="product-summary" id="summary-{{ order.id }}">
+                                    <span class="fw-bold">{{ first_item.product.name if first_item.product else '-' }}</span>
+                                    <span class="text-muted">× {{ first_item.quantity }}</span>
+                                    {% if order.items|length > 1 %}
+                                        <span class="text-primary small">等{{ order.items|length }}种商品</span>
+                                    {% endif %}
+                                </div>
+                                {% if order.items|length > 1 %}
+                                <div class="product-detail d-none" id="detail-{{ order.id }}">
+                                    <div class="product-list">
+                                        {% for item in order.items %}
+                                        <div class="product-item d-flex justify-content-between align-items-center py-1 {% if not loop.last %}border-bottom{% endif %}">
+                                            <span>{{ item.product.name if item.product else '-' }}</span>
+                                            <span class="text-muted">× {{ item.quantity }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>¥{{ "%.2f"|format(order.total_amount) }}</td>
+                        <td>
+                            {% if order.status == 'draft' %}
+                                <span class="badge bg-secondary">草稿</span>
+                            {% elif order.status == 'pending' %}
+                                <span class="badge bg-warning text-dark">待入库</span>
+                            {% elif order.status == 'partial' %}
+                                <span class="badge bg-info">部分入库</span>
+                            {% elif order.status == 'received' %}
+                                <span class="badge bg-success">已入库</span>
+                            {% elif order.status == 'cancelled' %}
+                                <span class="badge bg-danger">已取消</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else '-' }}</td>
+                        <td>
+                            {% if order.status in ('draft', 'pending') %}
+                            <a href="{{ url_for('purchase_orders.edit', id=order.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            {% endif %}
+                            {% if order.status in ('pending', 'partial') %}
+                            <a href="{{ url_for('purchase_orders.receive', id=order.id) }}" class="btn btn-sm btn-outline-success">
+                                <i class="fas fa-arrow-down"></i> 入库
+                            </a>
+                            {% endif %}
+                            {% if order.status not in ('received', 'cancelled') %}
+                            <form method="post" action="{{ url_for('purchase_orders.cancel', id=order.id) }}"
+                                  class="d-inline" onsubmit="return confirm('确定要取消该采购单吗？')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-3">暂无采购单数据</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        {% if pagination.pages > 1 %}
+        <nav>
+            <ul class="pagination justify-content-center">
+                {% if pagination.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('purchase_orders.list', page=pagination.prev_num, status=status, search=search, sort=sort, order=order) }}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for p in pagination.iter_pages() %}
+                    {% if p %}
+                        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('purchase_orders.list', page=p, status=status, search=search, sort=sort, order=order) }}">{{ p }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagination.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('purchase_orders.list', page=pagination.next_num, status=status, search=search, sort=sort, order=order) }}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.sortable:hover {
+    background-color: #f0f0f0;
+}
+.sort-icon {
+    margin-left: 5px;
+    color: #999;
+    font-size: 0.8em;
+}
+.sortable .fa-sort-up,
+.sortable .fa-sort-down {
+    color: #0d6efd;
+}
+
+/* 商品折叠展开样式 */
+.toggle-products {
+    color: #0d6efd;
+    text-decoration: none;
+}
+.toggle-products:hover {
+    color: #0a58ca;
+}
+.toggle-products:focus {
+    box-shadow: none;
+}
+.product-summary {
+    cursor: pointer;
+    padding: 4px 0;
+}
+.product-summary:hover {
+    background-color: #f8f9fa;
+}
+.product-detail {
+    margin-top: 8px;
+    padding: 8px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+.product-list {
+    font-size: 0.9em;
+}
+.product-item {
+    padding: 4px 8px;
+}
+.product-item:hover {
+    background-color: #e9ecef;
+    border-radius: 4px;
+}
+.order-row.expanded {
+    background-color: #f8f9fa;
+}
+.order-row.expanded .toggle-icon {
+    transform: rotate(180deg);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var currentSort = '{{ sort }}';
+var currentOrder = '{{ order }}';
+
+function handleSort(sortField) {
+    var newOrder = 'asc';
+    if (currentSort === sortField) {
+        newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+    }
+    var url = new URL(window.location.href);
+    url.searchParams.set('sort', sortField);
+    url.searchParams.set('order', newOrder);
+    url.searchParams.delete('page');
+    window.location.href = url.toString();
+}
+
+document.querySelectorAll('.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+        var sortField = this.getAttribute('data-sort');
+        if (sortField) {
+            handleSort(sortField);
+        }
+    });
+});
+
+// 商品折叠展开功能
+document.addEventListener('DOMContentLoaded', function() {
+    // 点击展开/收起按钮
+    document.querySelectorAll('.toggle-products').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var orderId = this.getAttribute('data-order-id');
+            toggleProducts(orderId);
+        });
+    });
+    
+    // 点击商品摘要区域也可以展开/收起
+    document.querySelectorAll('.product-summary').forEach(function(summary) {
+        summary.addEventListener('click', function() {
+            var orderId = this.closest('.products-cell').getAttribute('data-order-id');
+            toggleProducts(orderId);
+        });
+    });
+});
+
+function toggleProducts(orderId) {
+    var summary = document.getElementById('summary-' + orderId);
+    var detail = document.getElementById('detail-' + orderId);
+    var icon = document.querySelector('.toggle-icon-' + orderId);
+    var row = document.querySelector('.order-row[data-order-id="' + orderId + '"]');
+    
+    if (detail && summary) {
+        if (detail.classList.contains('d-none')) {
+            // 展开
+            detail.classList.remove('d-none');
+            summary.classList.add('text-muted');
+            if (icon) icon.classList.replace('fa-chevron-down', 'fa-chevron-up');
+            if (row) row.classList.add('expanded');
+        } else {
+            // 收起
+            detail.classList.add('d-none');
+            summary.classList.remove('text-muted');
+            if (icon) icon.classList.replace('fa-chevron-up', 'fa-chevron-down');
+            if (row) row.classList.remove('expanded');
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}角色管理 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<!-- 页面标题 -->
+<div class="page-header">
+    <div class="page-header-title">
+        <i class="fas fa-user-shield"></i>
+        <div>
+            <span>角色管理</span>
+            <small class="d-block text-muted" style="font-size: 0.75rem; font-weight: normal;">管理系统角色及其权限配置</small>
+        </div>
+    </div>
+    <div class="page-header-actions">
+        {% if not roles %}
+        <form method="POST" action="{{ url_for('roles.init_default') }}" style="display:inline;">
+            <button type="button" class="btn btn-outline-warning" onclick="if(confirm('确定要初始化默认角色吗？将创建管理员和操作员两个角色。')) { this.form.submit(); }">
+                <i class="fas fa-magic"></i>
+                <span>初始化默认角色</span>
+            </button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('roles.create') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i>
+            <span>新增角色</span>
+        </a>
+    </div>
+</div>
+
+{% if not roles %}
+<!-- 空状态 -->
+<div class="card">
+    <div class="card-body p-5">
+        <div class="empty-state">
+            <i class="fas fa-user-shield"></i>
+            <h3>暂无角色数据</h3>
+            <p>点击"初始化默认角色"按钮，系统将自动创建管理员和操作员两个默认角色</p>
+            <form method="POST" action="{{ url_for('roles.init_default') }}">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-magic"></i>
+                    <span>初始化默认角色</span>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- 角色卡片列表 -->
+<div class="row">
+    {% for role in roles %}
+    <div class="col-lg-6 col-xl-4 mb-4">
+        <div class="card h-100 {% if role.is_system %}border-start border-warning border-4{% endif %}">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">
+                        <i class="fas fa-shield-alt me-1 text-primary"></i>{{ role.name }}
+                        {% if role.is_system %}
+                        <span class="badge badge-warning">内置</span>
+                        {% endif %}
+                        {% if not role.is_active %}
+                        <span class="badge badge-secondary">已禁用</span>
+                        {% endif %}
+                    </h6>
+                    {% if role.description %}
+                    <small class="text-muted">{{ role.description }}</small>
+                    {% endif %}
+                </div>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('roles.edit', role_id=role.id) }}">
+                                <i class="fas fa-edit me-2"></i>编辑
+                            </a>
+                        </li>
+                        {% if not role.is_system %}
+                        <li>
+                            <button type="button" class="dropdown-item text-warning" onclick="toggleRole({{ role.id }}, this)">
+                                <i class="fas fa-{% if role.is_active %}ban{% else %}check{% endif %} me-2"></i>
+                                {% if role.is_active %}禁用{% else %}启用{% endif %}
+                            </button>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <button type="button" class="dropdown-item text-danger" onclick="deleteRole({{ role.id }}, '{{ role.name }}')">
+                                <i class="fas fa-trash me-2"></i>删除
+                            </button>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 统计信息 -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="text-muted">
+                        <i class="fas fa-key me-1"></i>
+                        <span>{{ role.get_permissions_list()|length }} 项权限</span>
+                    </div>
+                    <div class="text-muted">
+                        <i class="fas fa-users me-1"></i>
+                        <span>{{ role.users.count() }} 个用户</span>
+                    </div>
+                </div>
+
+                <!-- 权限概览 -->
+                {% set perms = role.get_permissions_list() %}
+                {% if perms %}
+                <div class="permission-overview" style="max-height: 200px; overflow-y: auto;">
+                    {% for module_key, module in permission_modules.items() %}
+                        {% set module_perms = [] %}
+                        {% for perm_key in module.permissions %}
+                            {% if perm_key in perms %}
+                                {% if module_perms.append(module.permissions[perm_key].name) %}{% endif %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if module_perms %}
+                        <div class="perm-module-header">
+                            <i class="{{ module.icon }} me-1"></i>{{ module.name }}
+                        </div>
+                        <div>
+                            {% for perm_name in module_perms %}
+                            <span class="badge badge-success">{{ perm_name }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state" style="padding: 2rem;">
+                    <i class="fas fa-lock-open" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                    <p class="mb-0 text-muted">暂无权限</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="card-footer text-muted" style="font-size: 0.8rem;">
+                <i class="fas fa-clock me-1"></i>创建于 {{ role.created_at.strftime('%Y-%m-%d %H:%M') }}
+                {% if role.updated_at != role.created_at %}
+                &nbsp;|&nbsp; 更新于 {{ role.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- 删除确认模态框 -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle text-danger me-2"></i>确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除角色 <strong id="deleteRoleName"></strong> 吗？</p>
+                <p class="text-muted mb-0">此操作不可撤销。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <form id="deleteForm" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-danger">确认删除</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.perm-module-header {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+.perm-module-header:first-child {
+    margin-top: 0;
+}
+.permission-overview .badge {
+    margin: 2px;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function deleteRole(roleId, roleName) {
+    document.getElementById('deleteRoleName').textContent = roleName;
+    document.getElementById('deleteForm').action = '/roles/delete/' + roleId;
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+function toggleRole(roleId, btn) {
+    $.post('/roles/toggle/' + roleId, function(data) {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message);
+        }
+    });
+}
+</script>
+{% endblock %}

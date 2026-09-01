@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}删除出入库记录 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('stock_transactions.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+{% if can_delete %}
+<!-- 可以删除 -->
+<div class="alert alert-danger">
+    <h5><i class="fas fa-exclamation-circle me-2"></i>确认删除</h5>
+    <p>确定要删除以下出入库记录吗？此操作不可恢复。</p>
+</div>
+{% else %}
+<!-- 有关联数据，不能删除 -->
+<div class="alert alert-danger">
+    <h5><i class="fas fa-ban me-2"></i>无法删除</h5>
+    <p>该出入库记录存在以下关联数据，无法直接删除：</p>
+    <ul>
+        {% for blocker in delete_blockers %}
+        <li>{{ blocker }}</li>
+        {% endfor %}
+    </ul>
+    <p class="mb-0"><strong>请先处理关联数据后再尝试删除。</strong></p>
+</div>
+{% endif %}
+
+<!-- 记录详情 -->
+<div class="card shadow">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">记录详情</h5>
+    </div>
+    <div class="card-body">
+        <div class="row mb-2">
+            <div class="col-md-3"><strong>单号：</strong></div>
+            <div class="col-md-3">{{ tx.transaction_no }}</div>
+            <div class="col-md-3"><strong>类型：</strong></div>
+            <div class="col-md-3">
+                {% if tx.type == 'stock_in' %}
+                    <span class="badge bg-success">入库</span>
+                {% elif tx.type == 'stock_out' %}
+                    <span class="badge bg-danger">出库</span>
+                {% elif tx.type == 'transfer_in' %}
+                    <span class="badge bg-info">调入</span>
+                {% elif tx.type == 'transfer_out' %}
+                    <span class="badge bg-warning text-dark">调出</span>
+                {% elif tx.type == 'adjustment' %}
+                    <span class="badge bg-secondary">调整</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-md-3"><strong>商品：</strong></div>
+            <div class="col-md-3">{{ tx.product.name if tx.product else tx.product_name }}</div>
+            <div class="col-md-3"><strong>仓库：</strong></div>
+            <div class="col-md-3">{{ tx.warehouse.name if tx.warehouse else '-' }}</div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-md-3"><strong>批次号：</strong></div>
+            <div class="col-md-3">{{ tx.batch_no or '-' }}</div>
+            <div class="col-md-3"><strong>数量：</strong></div>
+            <div class="col-md-3">{{ tx.quantity }} 盒</div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-md-3"><strong>收货方：</strong></div>
+            <div class="col-md-3">{{ tx.customer_name or (tx.customer.name if tx.customer else '-') }}</div>
+            <div class="col-md-3"><strong>关联单号：</strong></div>
+            <div class="col-md-3">{{ tx.reference_no or '-' }}</div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-md-3"><strong>单价：</strong></div>
+            <div class="col-md-3">{{ tx.unit_cost or '-' }}</div>
+            <div class="col-md-3"><strong>操作人：</strong></div>
+            <div class="col-md-3">{{ tx.operator or '-' }}</div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-md-3"><strong>备注：</strong></div>
+            <div class="col-md-9">{{ tx.remark or '-' }}</div>
+        </div>
+        <div class="row">
+            <div class="col-md-3"><strong>创建时间：</strong></div>
+            <div class="col-md-9">{{ tx.created_at.strftime('%Y-%m-%d %H:%M:%S') if tx.created_at else '-' }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- 关联交易记录 -->
+{% if related_info.related_transactions %}
+<div class="card shadow mt-4">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-link me-2"></i>关联交易记录（必须先处理）</h5>
+    </div>
+    <div class="card-body">
+        <table class="table table-sm table-bordered">
+            <thead>
+                <tr>
+                    <th>单号</th>
+                    <th>类型</th>
+                    <th>数量</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rel in related_info.related_transactions %}
+                <tr>
+                    <td>{{ rel.no }}</td>
+                    <td>{{ rel.type }}</td>
+                    <td>{{ rel.qty }}</td>
+                    <td>{{ rel.date }}</td>
+                    <td>
+                        <a href="{{ url_for('stock_transactions.edit', tx_id=tx.id) }}" class="btn btn-sm btn-outline-primary">查看</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- 按钮区域 -->
+<div class="mt-4">
+    {% if can_delete %}
+    <form method="post" onsubmit="return confirm('确定要删除这条记录吗？此操作不可恢复！');">
+        <button type="submit" class="btn btn-danger">
+            <i class="fas fa-trash-alt me-1"></i>确认删除
+        </button>
+        <a href="{{ url_for('stock_transactions.list') }}" class="btn btn-outline-secondary">取消</a>
+    </form>
+    {% else %}
+    <a href="{{ url_for('stock_transactions.list') }}" class="btn btn-primary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+    {% endif %}
+</div>
+
+{% endblock %}

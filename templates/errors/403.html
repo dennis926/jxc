@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}403 - 没有访问权限{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/error-pages.css') }}?v={{ cache_version }}" rel="stylesheet">
+<style>
+/* 嵌入 base.html 布局时的容器适配（错误页样式表本身面向独立整页） */
+.error-inline-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 65vh;
+    padding: 24px;
+}
+.error-inline-wrap .error-card { margin: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-inline-wrap">
+    <main class="error-card" role="alert">
+        <div class="error-head">
+            <div class="error-badge is-danger" aria-hidden="true">
+                <i class="fas fa-lock"></i>
+            </div>
+            <div>
+                <span class="error-code">HTTP 403 · FORBIDDEN</span>
+                <h1 class="error-title">没有访问权限</h1>
+            </div>
+        </div>
+
+        <div class="error-body">
+            <p class="error-desc">您当前的账号角色没有查看此页面的权限。如需访问，请联系管理员为您的角色开通对应权限。</p>
+        </div>
+
+        <div class="error-actions">
+            <a href="{{ url_for('dashboard.index') }}" class="err-btn err-btn-primary">
+                <i class="fas fa-house" aria-hidden="true"></i>
+                返回首页
+            </a>
+            <a href="#" class="err-btn err-btn-ghost" onclick="history.back(); return false;">
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                返回上一页
+            </a>
+        </div>
+
+        <div class="error-foot">
+            <i class="fas fa-circle-info" aria-hidden="true"></i>
+            <p>若您认为这是配置错误，可在「系统管理 → 角色权限」中核对当前账号的权限分配。</p>
+        </div>
+    </main>
+</div>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}平台订单 - 进销存管理系统{% endblock %}
+
+{% block content %}
+
+<!-- 提示信息 -->
+<div class="alert alert-info shadow">
+    <h5 class="alert-heading"><i class="fas fa-info-circle me-2"></i>功能说明</h5>
+    <p class="mb-0">平台订单同步功能正在开发中。目前已预留淘宝、京东、抖音、拼多多四个平台的API对接框架。</p>
+    <hr>
+    <p class="mb-2">对接前需要完成以下配置：</p>
+    <ul class="mb-0">
+        <li>在 <code>config.py</code> 中配置对应平台的 AppKey 和 AppSecret</li>
+        <li>在各平台开放平台注册开发者应用</li>
+        <li>完成 OAuth 授权流程获取 access_token</li>
+        <li>在 <code>services/platform/</code> 目录下实现具体的API调用逻辑</li>
+    </ul>
+</div>
+
+<!-- 平台卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card text-center shadow">
+            <div class="card-body">
+                <h5 class="card-title" style="color: #FF5000;">淘宝/天猫</h5>
+                <p class="text-muted">暂未对接</p>
+                <button class="btn btn-outline-secondary btn-sm" disabled>
+                    <i class="fas fa-sync me-1"></i>同步订单
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center shadow">
+            <div class="card-body">
+                <h5 class="card-title" style="color: #E4393C;">京东</h5>
+                <p class="text-muted">暂未对接</p>
+                <button class="btn btn-outline-secondary btn-sm" disabled>
+                    <i class="fas fa-sync me-1"></i>同步订单
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center shadow">
+            <div class="card-body">
+                <h5 class="card-title" style="color: #161823;">抖音</h5>
+                <p class="text-muted">暂未对接</p>
+                <button class="btn btn-outline-secondary btn-sm" disabled>
+                    <i class="fas fa-sync me-1"></i>同步订单
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center shadow">
+            <div class="card-body">
+                <h5 class="card-title" style="color: #E02E24;">拼多多</h5>
+                <p class="text-muted">暂未对接</p>
+                <button class="btn btn-outline-secondary btn-sm" disabled>
+                    <i class="fas fa-sync me-1"></i>同步订单
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

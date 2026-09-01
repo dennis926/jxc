@@ -1,0 +1,318 @@
+{% extends 'base.html' %}
+
+{% block title %}数据备份管理 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-end align-items-center mb-4">
+        <div>
+            <a href="{{ url_for('backup.restore') }}" class="btn btn-outline-danger me-2">
+                <i class="fas fa-undo-alt me-1"></i>恢复数据
+            </a>
+            <a href="{{ url_for('backup.templates') }}" class="btn btn-outline-info me-2">
+                <i class="fas fa-file-alt me-1"></i>邮件模板
+            </a>
+            <a href="{{ url_for('backup.config') }}" class="btn btn-outline-primary me-2">
+                <i class="fas fa-cog me-1"></i>邮箱配置
+            </a>
+            <form action="{{ url_for('backup.manual_backup') }}" method="POST" class="d-inline" id="manualBackupForm" onsubmit="return confirmBackup()">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary" id="backupBtn">
+                    <i class="fas fa-play me-1"></i>立即备份
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 状态卡片 -->
+    <div class="row mb-4">
+        <!-- 邮箱配置状态 -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <i class="fas fa-envelope me-2"></i>邮箱配置状态
+                </div>
+                <div class="card-body">
+                    {% if email_config %}
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-success me-2">已配置</span>
+                            <span class="text-muted">{{ email_config.sender_email }}</span>
+                        </div>
+                        <table class="table table-sm table-borderless mb-0">
+                            <tr>
+                                <td class="text-muted">SMTP服务器:</td>
+                                <td>{{ email_config.smtp_server }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">端口:</td>
+                                <td>{{ email_config.smtp_port }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">收件人:</td>
+                                <td>{{ email_config.receiver_email }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">TLS加密:</td>
+                                <td>{{ '启用' if email_config.use_tls else '禁用' }}</td>
+                            </tr>
+                        </table>
+                    {% else %}
+                        <div class="text-center py-3">
+                            <i class="fas fa-exclamation-circle text-warning fa-3x mb-3"></i>
+                            <p class="text-muted">尚未配置邮箱</p>
+                            <a href="{{ url_for('backup.config') }}" class="btn btn-sm btn-outline-primary">立即配置</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 自动备份状态 -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <i class="fas fa-clock me-2"></i>自动备份状态
+                </div>
+                <div class="card-body">
+                    {% if has_job %}
+                        <div class="text-center py-3">
+                            <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                            <h5 class="text-success">自动备份已启用</h5>
+                            <p class="text-muted mb-0">系统将在每天指定时间自动执行备份并发送到邮箱</p>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-3">
+                            <i class="fas fa-pause-circle text-secondary fa-3x mb-3"></i>
+                            <h5 class="text-secondary">自动备份已禁用</h5>
+                            <p class="text-muted mb-0">启用自动备份可在配置页面设置</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 邮件模板状态 -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-file-alt me-2"></i>邮件模板</span>
+                    <a href="{{ url_for('backup.templates') }}" class="text-decoration-none small">
+                        管理 <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if email_config and email_config.selected_template %}
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="badge bg-success me-2">已选用</span>
+                            <strong>{{ email_config.selected_template.name }}</strong>
+                        </div>
+                        <p class="text-muted small mb-0">
+                            {{ email_config.selected_template.description or '无描述' }}
+                        </p>
+                    {% else %}
+                        <div class="text-center py-3">
+                            <i class="fas fa-file-alt text-muted fa-2x mb-2"></i>
+                            <p class="text-muted mb-0 small">使用默认模板</p>
+                            <a href="{{ url_for('backup.config') }}" class="btn btn-sm btn-outline-primary mt-2">选择模板</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 备份统计 -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <i class="fas fa-chart-pie me-2"></i>备份统计
+                </div>
+                <div class="card-body">
+                    {# 统计数字由后端全量聚合传入，不再依赖被截断的 history 列表 #}
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <h3 class="text-primary mb-1">{{ backup_stats.total }}</h3>
+                            <small class="text-muted">总备份数</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <h3 class="text-success mb-1">{{ backup_stats.success }}</h3>
+                            <small class="text-muted">成功</small>
+                        </div>
+                        <div class="col-6">
+                            <h3 class="text-danger mb-1">{{ backup_stats.failed }}</h3>
+                            <small class="text-muted">失败</small>
+                        </div>
+                        <div class="col-6">
+                            <h3 class="text-info mb-1">{{ backup_stats.email_sent }}</h3>
+                            <small class="text-muted">已发送邮件</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 备份文件列表 -->
+    <div class="card mb-4">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-file-archive me-2"></i>服务器上的备份文件</span>
+            <span class="badge bg-secondary ms-2">共 {{ backup_files|length }} 个</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>文件名</th>
+                            <th>大小</th>
+                            <th>修改时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in backup_files %}
+                        <tr>
+                            <td>
+                                <i class="fas fa-file-archive text-warning me-2"></i>
+                                {{ f.filename }}
+                            </td>
+                            <td>{{ f.size_text }}</td>
+                            <td>{{ f.modified }}</td>
+                            <td>
+                                <a href="{{ url_for('backup.download', filename=f.filename) }}" class="btn btn-sm btn-outline-primary" title="下载">
+                                    <i class="fas fa-download"></i> 下载
+                                </a>
+                                <form action="{{ url_for('backup.delete_file', filename=f.filename) }}" method="POST" class="d-inline" onsubmit="return confirm('确定要删除备份文件 {{ f.filename }} 吗？此操作不可恢复！')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-2x mb-3 d-block"></i>
+                                backups 目录下暂无备份文件
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 备份历史记录 -->
+    <div class="card">
+        <div class="card-header bg-light">
+            <i class="fas fa-history me-2"></i>备份历史记录
+            <span class="badge bg-secondary ms-2">最近 {{ history_limit }} 条</span>
+            {% if history_total > history_limit %}
+            <small class="text-muted ms-2">共 {{ history_total }} 条</small>
+            {% endif %}
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>文件名</th>
+                            <th>文件大小</th>
+                            <th>备份类型</th>
+                            <th>状态</th>
+                            <th>邮件发送</th>
+                            <th>备份时间</th>
+                            <th>错误信息</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in history %}
+                        <tr>
+                            <td>
+                                <i class="fas fa-file-archive text-warning me-2"></i>
+                                {{ record.filename or '-' }}
+                            </td>
+                            <td>
+                                {% if record.file_size %}
+                                    {% if record.file_size < 1024 %}
+                                        {{ record.file_size }} B
+                                    {% elif record.file_size < 1024 * 1024 %}
+                                        {{ "%.2f"|format(record.file_size / 1024) }} KB
+                                    {% else %}
+                                        {{ "%.2f"|format(record.file_size / (1024 * 1024)) }} MB
+                                    {% endif %}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.backup_type == 'manual' %}
+                                    <span class="badge bg-primary">手动</span>
+                                {% else %}
+                                    <span class="badge bg-info">自动</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.status == 'success' %}
+                                    <span class="badge bg-success">成功</span>
+                                {% else %}
+                                    <span class="badge bg-danger">失败</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.sent_to_email %}
+                                    <span class="badge bg-success">已发送</span>
+                                {% else %}
+                                    {% if record.email_status == 'failed' %}
+                                        <span class="badge bg-danger">发送失败</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">未发送</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td>{{ record.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>
+                                {% if record.error_message %}
+                                    <span class="text-danger" title="{{ record.error_message }}">
+                                        {{ record.error_message[:30] }}{% if record.error_message|length > 30 %}...{% endif %}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-2x mb-3 d-block"></i>
+                                暂无备份记录
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 备份二次确认 + 防重复提交
+function confirmBackup() {
+    if (!confirm('确定要立即执行手动备份吗？\n\n备份过程可能需要几秒钟，请耐心等待。')) {
+        return false;
+    }
+
+    // 禁用按钮防止重复提交
+    var backupBtn = document.getElementById('backupBtn');
+    backupBtn.disabled = true;
+    backupBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>备份中...';
+
+    return true;
+}
+</script>
+{% endblock %}

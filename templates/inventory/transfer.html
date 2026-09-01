@@ -1,0 +1,712 @@
+{% extends "base.html" %}
+
+{% block title %}调拨操作 - 进销存管理系统{% endblock %}
+
+{% block extra_css %}
+<style>
+.code-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    gap: 5px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 5px;
+}
+.code-item {
+    padding: 8px 4px;
+    text-align: center;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+.code-item:hover { background: #e9ecef; }
+.code-item.selected { background: #198754; color: white; border-color: #198754; }
+.batch-select-btn { font-size: 12px; padding: 2px 10px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+.batch-select-btn:hover { transform: scale(1.05); }
+.accordion-button .batch-select-btn { box-shadow: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex justify-content-end align-items-center">
+        <a href="{{ url_for('inventory.list') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i>返回库存
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title"><i class="fas fa-clipboard-list me-2"></i>填写调拨信息</h5>
+    </div>
+    <div class="card-body">
+        <form id="transferForm" class="needs-validation" novalidate method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="col">
+                    <label for="from_warehouse_id" class="form-label required">调出仓库</label>
+                    <select class="form-select" id="from_warehouse_id" name="from_warehouse_id" required>
+                        <option value="">请选择仓库</option>
+                        {% for w in warehouses %}
+                        <option value="{{ w.id }}">{{ w.name }} ({{ w.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col">
+                    <label for="to_warehouse_id" class="form-label required">调入仓库</label>
+                    <select class="form-select" id="to_warehouse_id" name="to_warehouse_id" required disabled>
+                        <option value="">请先选择调出仓库</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row mt-4">
+                <div class="col">
+                    <label for="product_id" class="form-label required">调拨商品</label>
+                    <select class="form-select" id="product_id" name="product_id" required disabled>
+                        <option value="">请先选择仓库</option>
+                    </select>
+                </div>
+                <div class="col">
+                    <label for="quantity" class="form-label required">调拨数量</label>
+                    <input type="number" class="form-control" id="quantity" name="quantity"
+                           min="1" required placeholder="请输入数量" disabled>
+                    <div class="form-text" id="stockInfo"></div>
+                </div>
+            </div>
+
+            <!-- 防窜货码输入区域 -->
+            <div class="form-row mt-4">
+                <div class="col">
+                    <label class="form-label">
+                        <i class="fas fa-barcode me-2"></i>防窜货码（支持扫码或手动输入）
+                    </label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="batch_codes_input"
+                               placeholder="扫描条形码或手动输入，如：100001-100500">
+                        <button type="button" class="btn btn-primary" onclick="parseBatchCodes()">
+                            <i class="fas fa-qrcode me-1"></i>解析
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="openCodeSelector()">
+                            <i class="fas fa-list me-1"></i>选择码段
+                        </button>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        <i class="fas fa-info-circle"></i> 支持格式：
+                        <code>LYJYQEM100004000-LYJYQEM100005000</code>（带前缀码段）或
+                        <code>100001-100500</code>（纯数字范围）或
+                        <code>100001,100002,100003</code>（逗号分隔）
+                    </small>
+                </div>
+            </div>
+
+            <!-- 已解析的码段显示 -->
+            <div class="form-row mt-2">
+                <div class="col">
+                    <div id="parsedCodesDisplay" class="p-3 bg-light rounded" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-primary"><i class="fas fa-check-circle me-1"></i>已解析码段</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearParsedCodes()">
+                                <i class="fas fa-trash me-1"></i>清空
+                            </button>
+                        </div>
+                        <div id="codesList" class="flex-wrap d-flex gap-2"></div>
+                        <input type="hidden" id="batch_codes" name="batch_codes">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row mt-4">
+                <div class="col">
+                    <label for="operator" class="form-label">操作人</label>
+                    <input type="text" class="form-control" id="operator" name="operator"
+                           placeholder="请输入操作人" value="{{ session.get('real_name', '') or session.get('username', '') }}">
+                </div>
+                <div class="col">
+                    <label for="remark" class="form-label">备注</label>
+                    <input type="text" class="form-control" id="remark" name="remark"
+                           placeholder="请输入备注">
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                    <i class="fas fa-exchange-alt me-1"></i>确认调拨
+                </button>
+                <a href="{{ url_for('inventory.list') }}" class="btn btn-secondary">取消</a>
+            </div>
+        </form>
+
+        <!-- 码段选择弹窗 -->
+        <div class="modal fade" id="codeSelectorModal" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="fas fa-check-square me-2"></i>选择调拨码段</h5>
+                        <div class="d-flex align-items-center gap-2 me-auto ms-3">
+                            <span class="text-muted small">排序：</span>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-primary active" id="sortAscBtn" onclick="changeSortOrder('asc')" title="数字从小到大">
+                                    <i class="fas fa-sort-numeric-down"></i> 升序
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" id="sortDescBtn" onclick="changeSortOrder('desc')" title="数字从大到小">
+                                    <i class="fas fa-sort-numeric-up"></i> 降序
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <strong>商品：</strong><span id="modalProductName"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>需选数量：</strong><span id="modalQuantity" class="text-primary"></span>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <button type="button" class="btn btn-success" onclick="autoSelectCodes()">
+                                    <i class="fas fa-magic me-1"></i>自动分配（优先连续码段）
+                                </button>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <span class="badge bg-info">已选：<span id="modalSelectedCount">0</span> 个</span>
+                            </div>
+                        </div>
+                        <div id="batchAccordion" class="accordion"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="confirmCodeSelection()">
+                            <i class="fas fa-check me-1"></i>确认选择
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info mt-4">
+    <div class="d-flex align-items-center gap-2">
+        <i class="fas fa-info-circle fs-5"></i>
+        <div>
+            <strong>说明：</strong>调拨操作将同时减少调出仓库的库存并增加调入仓库的库存，调出仓库库存必须充足。
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var selectedCodes = [];
+var batchInfoMap = {};
+// 码段排序方向：'asc' | 'desc'，默认升序
+var sortOrder = 'asc';
+// 缓存当前码段数据，用于切换排序时重新渲染
+var currentBatchCodes = null;
+var currentWarehouseId = null;
+var currentMaxQuantity = 0;
+
+// 智能码段排序函数：提取数字部分按数字排序
+function smartSortCodes(codes, order) {
+    const sorted = [...codes].sort((a, b) => {
+        const numA = parseInt(String(a).replace(/[^0-9]/g, ''));
+        const numB = parseInt(String(b).replace(/[^0-9]/g, ''));
+        if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+            return numA - numB;
+        }
+        return String(a).localeCompare(String(b));
+    });
+    return order === 'desc' ? sorted.reverse() : sorted;
+}
+
+// 切换排序方向
+function changeSortOrder(order) {
+    if (sortOrder === order) return;
+    sortOrder = order;
+    document.getElementById('sortAscBtn').classList.toggle('active', order === 'asc');
+    document.getElementById('sortDescBtn').classList.toggle('active', order === 'desc');
+    if (currentBatchCodes && currentBatchCodes.length > 0) {
+        renderBatchAccordion(currentBatchCodes, currentWarehouseId, currentMaxQuantity);
+    }
+}
+
+// 字符串递增函数（处理大数字）
+function incrementString(str) {
+    const originalLength = str.length;
+
+    let result = '';
+    let carry = 1;
+
+    for (let i = str.length - 1; i >= 0; i--) {
+        const digit = parseInt(str[i]) + carry;
+        if (digit >= 10) {
+            result = '0' + result;
+            carry = 1;
+        } else {
+            result = digit.toString() + result;
+            carry = 0;
+        }
+    }
+
+    if (carry > 0) {
+        result = '1' + result;
+    }
+
+    if (result.length < originalLength) {
+        result = result.padStart(originalLength, '0');
+    }
+
+    return result;
+}
+
+function safeSubtract(a, b) {
+    const strA = String(a), strB = String(b);
+    if (strA.length <= 15 && strB.length <= 15) return parseInt(a) - parseInt(b);
+    let result = '', borrow = 0, i = strA.length - 1, j = strB.length - 1;
+    while (i >= 0 || j >= 0) {
+        const dA = i >= 0 ? parseInt(strA[i]) : 0, dB = j >= 0 ? parseInt(strB[j]) : 0;
+        let diff = dA - dB - borrow;
+        if (diff < 0) { diff += 10; borrow = 1; } else { borrow = 0; }
+        result = diff.toString() + result; i--; j--;
+    }
+    return parseInt(result);
+}
+
+function compareNumbers(a, b) {
+    const sA = String(a), sB = String(b);
+    if (sA.length !== sB.length) return sA.length - sB.length;
+    for (let i = 0; i < sA.length; i++) { if (sA[i] !== sB[i]) return sA.charCodeAt(i) - sB.charCodeAt(i); }
+    return 0;
+}
+
+function parseBarcodeContent(barcode) {
+    const r1 = /^([A-Za-z]+)(\d+)-([A-Za-z]+)(\d+)$/;
+    const m1 = barcode.match(r1);
+    if (m1 && m1[1] === m1[3] && compareNumbers(m1[4], m1[2]) >= 0) {
+        return { type: 'range', prefix: m1[1], start: m1[2], end: m1[4], count: safeSubtract(m1[4], m1[2]) + 1 };
+    }
+    const r2 = /^([A-Za-z]+)(\d+)-\1(\d+)$/;
+    const m2 = barcode.match(r2);
+    if (m2 && compareNumbers(m2[3], m2[2]) >= 0) {
+        return { type: 'range', prefix: m2[1], start: m2[2], end: m2[3], count: safeSubtract(m2[3], m2[2]) + 1 };
+    }
+    const r3 = /^(\d+)-(\d+)$/;
+    const m3 = barcode.match(r3);
+    if (m3 && compareNumbers(m3[2], m3[1]) >= 0) {
+        return { type: 'range', prefix: '', start: m3[1], end: m3[2], count: safeSubtract(m3[2], m3[1]) + 1 };
+    }
+    if (barcode.includes(',')) {
+        const codes = barcode.split(',').map(c => c.trim()).filter(c => c);
+        if (codes.length > 0 && codes.every(c => /^\d+$/.test(c))) return { type: 'multiple', codes: codes };
+    }
+    if (/^\d+$/.test(barcode)) return { type: 'single', codes: [barcode] };
+    return { type: 'unknown' };
+}
+
+function parseBatchCodes() {
+    const input = document.getElementById('batch_codes_input').value.trim();
+    if (!input) { alert('请输入防窜货码'); return; }
+    const result = parseBarcodeContent(input);
+    if (result.type === 'range') {
+        if (result.count > 10000) {
+            selectedCodes = [result.prefix + result.start + '-' + result.prefix + result.end];
+        } else {
+            const codes = []; let current = result.start;
+            for (let i = 0; i < result.count; i++) { codes.push(result.prefix + current); current = incrementString(current); }
+            selectedCodes = codes;
+        }
+        updateCodesDisplay();
+        alert('解析成功！码段：' + result.prefix + result.start + '-' + result.prefix + result.end + '，共 ' + result.count + ' 个码');
+    } else if (result.type === 'single') {
+        selectedCodes = [result.codes[0]]; updateCodesDisplay();
+        alert('解析成功！单个码：' + result.codes[0]);
+    } else if (result.type === 'multiple') {
+        selectedCodes = result.codes; updateCodesDisplay();
+        alert('解析成功！' + result.codes.length + ' 个码');
+    } else {
+        alert('无法解析条形码格式，请检查输入！');
+    }
+}
+
+function isSequential(a, b) {
+    const nA = parseInt(a), nB = parseInt(b);
+    if (!isNaN(nA) && !isNaN(nB)) return nB - nA === 1;
+    return false;
+}
+
+function updateCodesDisplay() {
+    const displayDiv = document.getElementById('parsedCodesDisplay');
+    const codesList = document.getElementById('codesList');
+    const hiddenInput = document.getElementById('batch_codes');
+    codesList.innerHTML = '';
+    if (selectedCodes.length === 0) { displayDiv.style.display = 'none'; return; }
+    const batchCodes = {};
+    document.querySelectorAll('.code-item.selected').forEach(el => {
+        const code = el.getAttribute('data-code'), batchId = el.getAttribute('data-batch');
+        if (!batchCodes[batchId]) batchCodes[batchId] = [];
+        batchCodes[batchId].push(code);
+    });
+    const sortedBatchIds = Object.keys(batchCodes).sort((a, b) => parseInt(a) - parseInt(b));
+    sortedBatchIds.forEach(batchId => {
+        const codes = smartSortCodes(batchCodes[batchId], sortOrder);
+        const info = batchInfoMap[batchId] || { batch_no: '未知批次', warehouse_name: '' };
+        const groupDiv = document.createElement('div'); groupDiv.className = 'mb-2 p-2 border rounded bg-white';
+        const titleDiv = document.createElement('div'); titleDiv.className = 'd-flex align-items-center gap-2 mb-1';
+        titleDiv.innerHTML = '<span class="badge bg-info text-dark"><i class="fas fa-layer-group me-1"></i>' + info.batch_no + '</span> <span class="text-muted small">' + info.warehouse_name + '</span> <span class="badge bg-primary">' + codes.length + ' 个</span>';
+        groupDiv.appendChild(titleDiv);
+        const codesDiv = document.createElement('div'); codesDiv.className = 'd-flex flex-wrap gap-1';
+        let ranges = [], rangeStart = codes[0], rangeEnd = codes[0];
+        for (let i = 1; i < codes.length; i++) { if (isSequential(rangeEnd, codes[i])) { rangeEnd = codes[i]; } else { ranges.push({ start: rangeStart, end: rangeEnd }); rangeStart = codes[i]; rangeEnd = codes[i]; } }
+        ranges.push({ start: rangeStart, end: rangeEnd });
+        ranges.forEach(range => { const tag = document.createElement('span'); tag.className = 'badge bg-primary'; tag.textContent = range.start === range.end ? range.start : range.start + ' - ' + range.end; codesDiv.appendChild(tag); });
+        groupDiv.appendChild(codesDiv); codesList.appendChild(groupDiv);
+    });
+    const countDiv = document.createElement('div'); countDiv.className = 'mt-2';
+    countDiv.innerHTML = '<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>共 ' + selectedCodes.length + ' 个码段</span>';
+    codesList.appendChild(countDiv);
+    hiddenInput.value = selectedCodes.join(',');
+    displayDiv.style.display = 'block';
+}
+
+function clearParsedCodes() {
+    selectedCodes = [];
+    document.getElementById('parsedCodesDisplay').style.display = 'none';
+    document.getElementById('batch_codes').value = '';
+    document.getElementById('batch_codes_input').value = '';
+}
+
+function openCodeSelector() {
+    const productId = document.getElementById('product_id').value;
+    const warehouseId = document.getElementById('from_warehouse_id').value;
+    const quantity = document.getElementById('quantity').value;
+    if (!productId) { alert('请先选择商品'); return; }
+    if (!quantity || quantity <= 0) { alert('请先输入调拨数量'); return; }
+    document.getElementById('modalProductName').textContent = document.getElementById('product_id').options[document.getElementById('product_id').selectedIndex].text;
+    document.getElementById('modalQuantity').textContent = quantity;
+    loadAvailableBatches(productId, warehouseId, quantity);
+    const modalEl = document.getElementById('codeSelectorModal');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+function loadAvailableBatches(productId, warehouseId, quantity) {
+    fetch('/batches/query-codes?product_id=' + productId + '&warehouse_id=' + warehouseId + '&quantity=' + quantity, {
+        credentials: 'same-origin'
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.total_available === 0) { alert('该商品没有可用的批次码'); return; }
+                if (data.total_available < quantity) { alert('警告：可用码数量(' + data.total_available + ')少于调拨数量(' + quantity + ')'); }
+                // 缓存数据用于切换排序
+                currentBatchCodes = data.codes;
+                currentWarehouseId = warehouseId;
+                currentMaxQuantity = quantity;
+                renderBatchAccordion(data.codes, warehouseId, quantity);
+            } else { alert('获取可用码段失败: ' + (data.message || '未知错误')); }
+        })
+        .catch(error => { alert('加载失败：' + error); });
+}
+
+function renderBatchAccordion(codes, warehouseId, maxQuantity) {
+    const accordion = document.getElementById('batchAccordion');
+    accordion.innerHTML = '';
+    const batches = {};
+    codes.forEach(code => { if (!batches[code.batch_id]) batches[code.batch_id] = { batch_no: code.batch_no, warehouse_name: code.warehouse_name, codes: [] }; batches[code.batch_id].codes.push(code); });
+    // 对每个批次内的码段应用智能排序
+    Object.keys(batches).forEach(batchId => {
+        batches[batchId].codes = smartSortCodes(
+            batches[batchId].codes.map(c => c.code),
+            sortOrder
+        ).map(codeStr => {
+            return batches[batchId].codes.find(c => c.code === codeStr) || { code: codeStr };
+        });
+    });
+    const sortedBatchIds = Object.keys(batches).sort((a, b) => parseInt(a) - parseInt(b));
+    batchInfoMap = {};
+    sortedBatchIds.forEach(batchId => { batchInfoMap[batchId] = { batch_no: batches[batchId].batch_no, warehouse_name: batches[batchId].warehouse_name }; });
+    sortedBatchIds.forEach((batchId, index) => {
+        const batch = batches[batchId];
+        const accordionItem = document.createElement('div'); accordionItem.className = 'accordion-item';
+        const isFirst = index === 0;
+        accordionItem.innerHTML = '<h2 class="accordion-header" id="heading' + batchId + '"><button class="accordion-button ' + (isFirst ? '' : 'collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#collapse' + batchId + '"><div class="d-flex w-100 justify-content-between align-items-center"><div><strong>' + batch.batch_no + '</strong> <span class="badge bg-secondary ms-2">' + batch.warehouse_name + '</span></div><div class="d-flex align-items-center gap-2" onclick="event.stopPropagation()"><button type="button" class="btn btn-sm btn-outline-primary batch-select-btn" onclick="selectAllBatchCodes(' + batchId + ', this)" title="选中该批次全部码段"><i class="fas fa-check-double me-1"></i>选择</button> <span class="badge bg-success">' + batch.codes.length + ' 可用</span></div></div></button></h2><div id="collapse' + batchId + '" class="accordion-collapse collapse ' + (isFirst ? 'show' : '') + '" data-bs-parent="#batchAccordion"><div class="accordion-body"><div class="code-grid" id="codesGrid' + batchId + '">' + batch.codes.map(c => '<div class="code-item" data-code="' + c.code + '" data-batch="' + batchId + '" onclick="toggleCode(this, ' + maxQuantity + ')">' + c.code + '</div>').join('') + '</div></div></div>';
+        accordion.appendChild(accordionItem);
+    });
+    selectedCodes = [];
+    document.getElementById('modalSelectedCount').textContent = '0';
+}
+
+function toggleCode(element, maxQuantity) {
+    const code = element.getAttribute('data-code');
+    if (element.classList.contains('selected')) { element.classList.remove('selected'); selectedCodes = selectedCodes.filter(c => c !== code); }
+    else { if (selectedCodes.length >= maxQuantity) { alert('最多只能选择 ' + maxQuantity + ' 个码'); return; } element.classList.add('selected'); selectedCodes.push(code); }
+    document.getElementById('modalSelectedCount').textContent = selectedCodes.length;
+}
+
+function autoSelectCodes() {
+    const maxQuantity = parseInt(document.getElementById('modalQuantity').textContent);
+    document.querySelectorAll('.code-item.selected').forEach(el => el.classList.remove('selected'));
+    selectedCodes = [];
+    let selected = 0;
+    const codeItems = document.querySelectorAll('.code-item');
+    for (let el of codeItems) { if (selected >= maxQuantity) break; el.classList.add('selected'); selectedCodes.push(el.getAttribute('data-code')); selected++; }
+    document.getElementById('modalSelectedCount').textContent = selectedCodes.length;
+}
+
+function selectAllBatchCodes(batchId, btnElement) {
+    const maxQuantity = parseInt(document.getElementById('modalQuantity').textContent);
+    const codeItems = document.querySelectorAll('.code-item[data-batch="' + batchId + '"]');
+    const currentSelected = selectedCodes.length;
+    const remaining = maxQuantity - currentSelected;
+    const allSelected = Array.from(codeItems).every(el => el.classList.contains('selected'));
+    if (allSelected) {
+        codeItems.forEach(el => { const code = el.getAttribute('data-code'); el.classList.remove('selected'); selectedCodes = selectedCodes.filter(c => c !== code); });
+        btnElement.innerHTML = '<i class="fas fa-check-double me-1"></i>选择'; btnElement.classList.remove('btn-primary'); btnElement.classList.add('btn-outline-primary');
+    } else {
+        if (remaining <= 0) { alert('已达到需选数量上限 ' + maxQuantity + ' 个'); return; }
+        let selectedCount = 0;
+        codeItems.forEach(el => { if (!el.classList.contains('selected') && selectedCount < remaining) { el.classList.add('selected'); const code = el.getAttribute('data-code'); if (!selectedCodes.includes(code)) { selectedCodes.push(code); selectedCount++; } } });
+        const hasMoreUnselected = Array.from(codeItems).some(el => !el.classList.contains('selected'));
+        if (hasMoreUnselected) { btnElement.innerHTML = '<i class="fas fa-check me-1"></i>部分'; btnElement.classList.remove('btn-outline-primary'); btnElement.classList.add('btn-warning'); }
+        else { btnElement.innerHTML = '<i class="fas fa-times me-1"></i>取消'; btnElement.classList.remove('btn-outline-primary'); btnElement.classList.add('btn-primary'); }
+    }
+    document.getElementById('modalSelectedCount').textContent = selectedCodes.length;
+    updateBatchButtonStates();
+}
+
+function updateBatchButtonStates() {
+    document.querySelectorAll('.batch-select-btn').forEach(btn => {
+        const accordionItem = btn.closest('.accordion-item'); if (!accordionItem) return;
+        const codeItems = accordionItem.querySelectorAll('.code-item');
+        const selectedCount = Array.from(codeItems).filter(el => el.classList.contains('selected')).length;
+        const allSelected = selectedCount === codeItems.length;
+        const hasSelected = selectedCount > 0;
+        btn.classList.remove('btn-primary', 'btn-outline-primary', 'btn-warning');
+        if (allSelected) { btn.innerHTML = '<i class="fas fa-times me-1"></i>取消'; btn.classList.add('btn-primary'); }
+        else if (hasSelected) { btn.innerHTML = '<i class="fas fa-check me-1"></i>部分'; btn.classList.add('btn-warning'); }
+        else { btn.innerHTML = '<i class="fas fa-check-double me-1"></i>选择'; btn.classList.add('btn-outline-primary'); }
+    });
+}
+
+function confirmCodeSelection() {
+    const quantity = parseInt(document.getElementById('modalQuantity').textContent);
+    if (selectedCodes.length === 0) { alert('请至少选择 1 个码'); return; }
+    if (selectedCodes.length < quantity) { if (!confirm('需选数量为 ' + quantity + ' 个，当前已选择 ' + selectedCodes.length + ' 个，数量不足。是否继续？')) return; }
+    document.getElementById('quantity').value = selectedCodes.length;
+    updateCodesDisplay();
+    const modal = bootstrap.Modal.getInstance(document.getElementById('codeSelectorModal'));
+    modal.hide();
+}
+
+(function() {
+    'use strict';
+
+    const fromWarehouseSelect = document.getElementById('from_warehouse_id');
+    const toWarehouseSelect = document.getElementById('to_warehouse_id');
+    const productSelect = document.getElementById('product_id');
+    const quantityInput = document.getElementById('quantity');
+    const stockInfo = document.getElementById('stockInfo');
+    const submitBtn = document.getElementById('submitBtn');
+    const form = document.getElementById('transferForm');
+
+    // 仓库数据
+    const warehouses = [
+        {% for w in warehouses %}
+        { id: {{ w.id }}, name: '{{ w.name }}', code: '{{ w.code }}' },
+        {% endfor %}
+    ];
+
+    // 监听调出仓库变化
+    fromWarehouseSelect.addEventListener('change', function() {
+        const fromWarehouseId = this.value;
+
+        // 重置调入仓库
+        toWarehouseSelect.innerHTML = '<option value="">请选择仓库</option>';
+        toWarehouseSelect.disabled = true;
+
+        // 重置商品
+        productSelect.innerHTML = '<option value="">请先选择仓库</option>';
+        productSelect.disabled = true;
+
+        // 重置数量
+        quantityInput.value = '';
+        quantityInput.disabled = true;
+        quantityInput.max = '';
+        stockInfo.textContent = '';
+        submitBtn.disabled = true;
+
+        if (!fromWarehouseId) return;
+
+        // 填充调入仓库选项（排除调出仓库）
+        warehouses.forEach(w => {
+            if (w.id != fromWarehouseId) {
+                const option = document.createElement('option');
+                option.value = w.id;
+                option.textContent = `${w.name} (${w.code})`;
+                toWarehouseSelect.appendChild(option);
+            }
+        });
+        toWarehouseSelect.disabled = false;
+    });
+
+    // 监听调入仓库变化
+    toWarehouseSelect.addEventListener('change', function() {
+        const toWarehouseId = this.value;
+        const fromWarehouseId = fromWarehouseSelect.value;
+
+        // 重置商品
+        productSelect.innerHTML = '<option value="">请先选择仓库</option>';
+        productSelect.disabled = true;
+
+        // 重置数量
+        quantityInput.value = '';
+        quantityInput.disabled = true;
+        stockInfo.textContent = '';
+        submitBtn.disabled = true;
+
+        // 必须同时选择调出仓库和调入仓库才获取库存
+        if (!fromWarehouseId || !toWarehouseId) return;
+
+        // 获取仓库中的商品库存
+        fetch(`/inventory/api/products-by-warehouse?warehouse_id=${fromWarehouseId}`, {
+            credentials: 'same-origin'
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.products && data.products.length > 0) {
+                    productSelect.innerHTML = '<option value="">请选择商品</option>';
+                    data.products.forEach(item => {
+                        if (item.quantity > 0) {
+                            const option = document.createElement('option');
+                            option.value = item.id;
+                            option.textContent = `${item.name} (${item.sku}) - ${item.quantity}盒`;
+                            option.dataset.quantity = item.quantity;
+                            productSelect.appendChild(option);
+                        }
+                    });
+                    productSelect.disabled = false;
+                } else {
+                    productSelect.innerHTML = '<option value="">该仓库暂无库存商品</option>';
+                    productSelect.disabled = true;
+                }
+            })
+            .catch(error => {
+                console.error('获取库存失败:', error);
+                alert('获取库存失败，请重试');
+            });
+    });
+
+    // 监听商品变化
+    productSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const maxQuantity = selectedOption.dataset.quantity;
+
+        quantityInput.value = '';
+        quantityInput.disabled = !this.value;
+        quantityInput.max = maxQuantity || '';
+        stockInfo.textContent = this.value ? `可用库存: ${maxQuantity || 0} 盒` : '';
+        submitBtn.disabled = true;
+    });
+
+    // 监听数量变化
+    quantityInput.addEventListener('input', function() {
+        const max = parseInt(this.max) || 0;
+        const val = parseInt(this.value) || 0;
+
+        if (val > max) {
+            this.value = max;
+        }
+
+        // 检查是否可以提交
+        const fromWarehouseId = fromWarehouseSelect.value;
+        const toWarehouseId = toWarehouseSelect.value;
+        const productId = productSelect.value;
+        submitBtn.disabled = !(fromWarehouseId && toWarehouseId && productId && this.value > 0);
+    });
+
+    // 表单提交
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            return;
+        }
+
+        const fromWarehouseId = fromWarehouseSelect.value;
+        const toWarehouseId = toWarehouseSelect.value;
+        const productId = productSelect.value;
+        const quantity = parseInt(quantityInput.value);
+        const operator = document.getElementById('operator').value;
+        const remark = document.getElementById('remark').value;
+
+        // 验证调入仓库不能是调出仓库
+        if (fromWarehouseId === toWarehouseId) {
+            alert('调入仓库不能与调出仓库相同！');
+            return;
+        }
+
+        // 验证数量
+        const maxQuantity = parseInt(productSelect.options[productSelect.selectedIndex].dataset.quantity) || 0;
+        if (quantity > maxQuantity) {
+            alert(`调拨数量不能超过库存数量(${maxQuantity})！`);
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>提交中...';
+
+        // 发送调拨请求
+        const formData = new FormData();
+        formData.append('from_warehouse_id', fromWarehouseId);
+        formData.append('to_warehouse_id', toWarehouseId);
+        formData.append('product_id', productId);
+        formData.append('quantity', quantity);
+        formData.append('operator', operator);
+        formData.append('remark', remark);
+
+        // 添加码段信息
+        const batchCodes = document.getElementById('batch_codes').value;
+        if (batchCodes) {
+            formData.append('batch_codes', batchCodes);
+        }
+
+        fetch('{{ url_for("inventory.transfer") }}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('调拨成功！');
+                window.location.href = '{{ url_for("inventory.list") }}';
+            } else {
+                alert(data.message || '调拨失败！');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-exchange-alt me-1"></i>确认调拨';
+            }
+        })
+        .catch(error => {
+            console.error('调拨失败:', error);
+            alert('调拨失败，请重试！');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-exchange-alt me-1"></i>确认调拨';
+        });
+    });
+})();
+</script>
+{% endblock %}

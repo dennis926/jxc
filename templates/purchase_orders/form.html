@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}{{ '编辑采购单' if order else '新建采购单' }} - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('purchase_orders.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" class="needs-validation" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">采购单号</label>
+                    <input type="text" class="form-control" value="{{ order.po_no if order else '自动生成' }}"
+                           disabled>
+                </div>
+                <div class="col-md-4">
+                    <label for="supplier_id" class="form-label">供应商 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="supplier_id" name="supplier_id" required>
+                        <option value="">请选择供应商</option>
+                        {% for s in suppliers %}
+                        <option value="{{ s.id }}" {% if order and order.supplier_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="invalid-feedback">请选择供应商</div>
+                </div>
+                <div class="col-md-4">
+                    <label for="warehouse_id" class="form-label">入库仓库 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="warehouse_id" name="warehouse_id" required>
+                        <option value="">请选择仓库</option>
+                        {% for w in warehouses %}
+                        <option value="{{ w.id }}" {% if order and order.warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="invalid-feedback">请选择仓库</div>
+                </div>
+                <div class="col-12">
+                    <label for="remark" class="form-label">备注</label>
+                    <textarea class="form-control" id="remark" name="remark" rows="2"
+                              placeholder="请输入备注">{{ order.remark if order else '' }}</textarea>
+                </div>
+            </div>
+
+            <!-- 采购明细 -->
+            <h6 class="mb-3"><i class="fas fa-list me-2"></i>采购明细</h6>
+            <div id="items-container">
+                <table class="table table-bordered" id="items-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:35%">商品</th>
+                            <th style="width:20%">数量</th>
+                            <th style="width:25%">单位成本</th>
+                            <th style="width:15%">小计</th>
+                            <th style="width:5%"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="items-body">
+                        {% if items %}
+                            {% for item in items %}
+                            <tr class="item-row">
+                                <td>
+                                    <select name="product_id[]" class="form-select product-select">
+                                        <option value="">请选择商品</option>
+                                        {% for p in products %}
+                                        <option value="{{ p.id }}" data-cost-price="{{ p.cost_price or 0 }}" data-selling-price="{{ p.selling_price or 0 }}" {% if item.product_id == p.id %}selected{% endif %}>{{ p.name }} ({{ p.sku }})</option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted product-price-hint" style="display:none;">
+                                        成本价: <span class="hint-cost">0</span> 元 | 售价: <span class="hint-selling">0</span> 元
+                                    </small>
+                                </td>
+                                <td><input type="number" name="quantity[]" class="form-control item-qty" min="1" value="{{ item.quantity }}"></td>
+                                <td><input type="number" name="unit_cost[]" class="form-control item-cost" step="0.01" min="0" value="{{ item.unit_cost }}"></td>
+                                <td class="item-subtotal text-end">{{ item.quantity * item.unit_cost }}</td>
+                                <td><button type="button" class="btn btn-sm btn-outline-danger remove-item"><i class="fas fa-times"></i></button></td>
+                            </tr>
+                            {% endfor %}
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <button type="button" class="btn btn-outline-success btn-sm mb-3" id="add-item">
+                <i class="fas fa-plus me-1"></i>添加商品
+            </button>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>总金额: <span class="text-primary" id="total-amount">0.00</span></h5>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>保存
+                </button>
+                <a href="{{ url_for('purchase_orders.list') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 商品选项模板（带价格数据）
+    var productOptions = '';
+    {% for p in products %}
+    productOptions += '<option value="{{ p.id }}" data-cost-price="{{ p.cost_price or 0 }}" data-selling-price="{{ p.selling_price or 0 }}">{{ p.name }} ({{ p.sku }})</option>';
+    {% endfor %}
+
+    // 添加商品行
+    document.getElementById('add-item').addEventListener('click', function() {
+        var row = document.createElement('tr');
+        row.className = 'item-row';
+        row.innerHTML = '<td><select name="product_id[]" class="form-select product-select"><option value="">请选择商品</option>' + productOptions + '</select>' +
+            '<small class="text-muted product-price-hint" style="display:none;">成本价: <span class="hint-cost">0</span> 元 | 售价: <span class="hint-selling">0</span> 元</small></td>' +
+            '<td><input type="number" name="quantity[]" class="form-control item-qty" min="1" value="1"></td>' +
+            '<td><input type="number" name="unit_cost[]" class="form-control item-cost" step="0.01" min="0" value="0"></td>' +
+            '<td class="item-subtotal text-end">0</td>' +
+            '<td><button type="button" class="btn btn-sm btn-outline-danger remove-item"><i class="fas fa-times"></i></button></td>';
+        document.getElementById('items-body').appendChild(row);
+        bindItemEvents(row);
+    });
+
+    // 删除商品行
+    document.getElementById('items-body').addEventListener('click', function(e) {
+        if (e.target.closest('.remove-item')) {
+            var row = e.target.closest('.item-row');
+            row.remove();
+            updateTotal();
+        }
+    });
+
+    // 商品选择后自动填充价格
+    document.getElementById('items-body').addEventListener('change', function(e) {
+        if (e.target.classList.contains('product-select')) {
+            var row = e.target.closest('.item-row');
+            var selectedOption = e.target.options[e.target.selectedIndex];
+            var hint = row.querySelector('.product-price-hint');
+
+            if (e.target.value) {
+                var costPrice = selectedOption.getAttribute('data-cost-price') || 0;
+                var sellingPrice = selectedOption.getAttribute('data-selling-price') || 0;
+
+                // 显示价格提示
+                row.querySelector('.hint-cost').textContent = parseFloat(costPrice).toFixed(2);
+                row.querySelector('.hint-selling').textContent = parseFloat(sellingPrice).toFixed(2);
+                hint.style.display = 'inline';
+
+                // 自动填充成本价（如果当前为0或未修改）
+                var costInput = row.querySelector('.item-cost');
+                if (parseFloat(costInput.value) === 0 && parseFloat(costPrice) > 0) {
+                    costInput.value = parseFloat(costPrice).toFixed(2);
+                    updateRowTotal(row);
+                }
+            } else {
+                hint.style.display = 'none';
+            }
+        }
+    });
+
+    // 绑定输入事件
+    function bindItemEvents(row) {
+        row.querySelector('.item-qty').addEventListener('input', function() { updateRowTotal(row); });
+        row.querySelector('.item-cost').addEventListener('input', function() { updateRowTotal(row); });
+    }
+
+    // 更新行小计
+    function updateRowTotal(row) {
+        var qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+        var cost = parseFloat(row.querySelector('.item-cost').value) || 0;
+        row.querySelector('.item-subtotal').textContent = (qty * cost).toFixed(2);
+        updateTotal();
+    }
+
+    // 更新总金额
+    function updateTotal() {
+        var total = 0;
+        document.querySelectorAll('.item-subtotal').forEach(function(el) {
+            total += parseFloat(el.textContent) || 0;
+        });
+        document.getElementById('total-amount').textContent = total.toFixed(2);
+    }
+
+    // 绑定已有行的事件
+    document.querySelectorAll('.item-row').forEach(function(row) {
+        bindItemEvents(row);
+        // 初始化已有行的价格提示
+        var select = row.querySelector('.product-select');
+        if (select && select.value) {
+            var selectedOption = select.options[select.selectedIndex];
+            var hint = row.querySelector('.product-price-hint');
+            if (hint && selectedOption) {
+                var costPrice = selectedOption.getAttribute('data-cost-price') || 0;
+                var sellingPrice = selectedOption.getAttribute('data-selling-price') || 0;
+                row.querySelector('.hint-cost').textContent = parseFloat(costPrice).toFixed(2);
+                row.querySelector('.hint-selling').textContent = parseFloat(sellingPrice).toFixed(2);
+                hint.style.display = 'inline';
+            }
+        }
+    });
+
+    // 初始计算
+    updateTotal();
+
+    // 表单验证
+    var forms = document.querySelectorAll('.needs-validation');
+    Array.prototype.slice.call(forms).forEach(function(form) {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+});
+</script>
+{% endblock %}

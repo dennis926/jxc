@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ '编辑供应商' if supplier else '新增供应商' }} - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('suppliers.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" class="needs-validation" novalidate>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="name" class="form-label">供应商名称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="name" name="name"
+                           value="{{ supplier.name if supplier else '' }}" required placeholder="请输入供应商名称">
+                    <div class="invalid-feedback">请输入供应商名称</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="contact_person" class="form-label">联系人</label>
+                    <input type="text" class="form-control" id="contact_person" name="contact_person"
+                           value="{{ supplier.contact_person if supplier else '' }}" placeholder="请输入联系人">
+                </div>
+                <div class="col-md-6">
+                    <label for="contact_phone" class="form-label">联系电话</label>
+                    <input type="text" class="form-control" id="contact_phone" name="contact_phone"
+                           value="{{ supplier.contact_phone if supplier else '' }}" placeholder="请输入联系电话">
+                </div>
+                <div class="col-md-6">
+                    <label for="email" class="form-label">邮箱</label>
+                    <input type="email" class="form-control" id="email" name="email"
+                           value="{{ supplier.email if supplier else '' }}" placeholder="请输入邮箱">
+                </div>
+                <div class="col-12">
+                    <label for="address" class="form-label">地址</label>
+                    <input type="text" class="form-control" id="address" name="address"
+                           value="{{ supplier.address if supplier else '' }}" placeholder="请输入地址">
+                </div>
+                <div class="col-12">
+                    <label for="description" class="form-label">备注</label>
+                    <textarea class="form-control" id="description" name="description" rows="3"
+                              placeholder="请输入备注">{{ supplier.description if supplier else '' }}</textarea>
+                </div>
+            </div>
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>保存
+                </button>
+                <a href="{{ url_for('suppliers.list') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+    var forms = document.querySelectorAll('.needs-validation');
+    Array.prototype.slice.call(forms).forEach(function(form) {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+})();
+</script>
+{% endblock %}

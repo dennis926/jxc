@@ -1,0 +1,652 @@
+{% extends "base.html" %}
+
+{% block title %}入库操作 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('inventory.list') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回库存
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title">填写入库信息</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" class="needs-validation" id="stockInForm" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="warehouse_id" class="form-label required">入库仓库</label>
+                        <select class="form-select" id="warehouse_id" name="warehouse_id" required>
+                            <option value="">请选择仓库</option>
+                            {% for w in warehouses %}
+                            <option value="{{ w.id }}">{{ w.name }} ({{ w.code }})</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">请选择仓库</div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="product_id" class="form-label required">入库商品</label>
+                        <select class="form-select" id="product_id" name="product_id" required>
+                            <option value="">请选择商品</option>
+                            {% for p in products %}
+                            <option value="{{ p.id }}" data-cost-price="{{ p.cost_price or 0 }}" data-selling-price="{{ p.selling_price or 0 }}">{{ p.name }} ({{ p.sku }})</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">请选择商品</div>
+                        <div id="productPriceInfo" class="mt-1" style="display: none;">
+                            <small class="text-muted">
+                                <i class="fas fa-tag me-1"></i>成本价: <strong id="productCostPrice">0</strong> 元 |
+                                售价: <strong id="productSellingPrice">0</strong> 元
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="quantity" class="form-label required">入库数量</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity"
+                               min="1" max="5000" required placeholder="请输入数量">
+                        <div class="invalid-feedback">请输入入库数量（1-5000）</div>
+                        <div class="form-text text-muted">单次入库最多5000个</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="unit_cost" class="form-label required">单位成本 <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0" class="form-control" id="unit_cost" name="unit_cost"
+                               value="0" placeholder="0.00" required>
+                        <div class="invalid-feedback">请输入单位成本</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="reference_no" class="form-label">关联单号</label>
+                        <input type="text" class="form-control" id="reference_no" name="reference_no"
+                               placeholder="如采购单号">
+                    </div>
+                </div>
+
+                <!-- 生产日期和有效期 -->
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="production_date" class="form-label required">
+                            <i class="fas fa-calendar-alt me-1"></i>生产日期 <span class="text-danger">*</span>
+                        </label>
+                        <input type="date" class="form-control" id="production_date" name="production_date"
+                               placeholder="点击选择" onkeydown="return false;" onpaste="return false;" autocomplete="off" required>
+                        <div class="invalid-feedback">请选择生产日期</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="expire_date" class="form-label required">
+                            <i class="fas fa-calendar-times me-1"></i>过期日期 <span class="text-danger">*</span>
+                        </label>
+                        <input type="date" class="form-control" id="expire_date" name="expire_date"
+                               placeholder="点击选择" onkeydown="return false;" onpaste="return false;" autocomplete="off" required>
+                        <div class="invalid-feedback">请选择过期日期</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-clock me-1"></i>有效期预览
+                        </label>
+                        <div id="validityPreview" class="form-control-plaintext text-muted">
+                            填写日期后自动计算
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 防窜货码输入区域 -->
+                <div class="col-12">
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-barcode me-2"></i>防窜货码（支持扫码或手动输入）
+                        </label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="batch_codes_input" 
+                                   placeholder="扫描条形码或手动输入，如：LYJYQEM100004000-LYJYQEM100005000 或 100001-100500">
+                            <button type="button" class="btn btn-primary" onclick="parseBatchCodes()">
+                                <i class="fas fa-qrcode me-1"></i>解析
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle"></i> 支持格式：
+                            <code>LYJYQEM100004000-LYJYQEM100005000</code>（带前缀码段）或 
+                            <code>100001-100500</code>（纯数字范围）或 
+                            <code>100001,100002,100003</code>（逗号分隔）
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 已解析的码段显示 -->
+                <div class="col-12">
+                    <div id="parsedCodesDisplay" class="p-4 bg-primary rounded-lg" style="display:none; background: var(--primary-subtle) !important;">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="text-primary font-semibold"><i class="fas fa-check-circle me-1"></i>已解析码段</span>
+                            <button type="button" class="btn btn-danger btn-sm" onclick="clearParsedCodes()">
+                                <i class="fas fa-trash me-1"></i>清空
+                            </button>
+                        </div>
+                        <div id="codesList" class="d-flex flex-wrap gap-2"></div>
+                        <input type="hidden" id="batch_codes" name="batch_codes">
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="operator" class="form-label required">操作人 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="operator" name="operator"
+                               placeholder="请输入操作人" value="{{ session.get('real_name') or session.get('username', '') }}" required>
+                        <div class="invalid-feedback">请输入操作人</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="remark" class="form-label">备注</label>
+                        <input type="text" class="form-control" id="remark" name="remark"
+                               placeholder="请输入备注">
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-success" id="submitBtn">
+                    <i class="fas fa-arrow-down me-1"></i>确认入库
+                </button>
+                <a href="{{ url_for('inventory.list') }}" class="btn btn-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if purchase_orders %}
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="card-title"><i class="fas fa-shopping-cart me-2"></i>待入库采购单</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>采购单号</th>
+                        <th>供应商</th>
+                        <th>状态</th>
+                        <th>总金额</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for po in purchase_orders %}
+                    <tr>
+                        <td><code>{{ po.po_no }}</code></td>
+                        <td>{{ po.supplier.name if po.supplier else '-' }}</td>
+                        <td>
+                            {% if po.status == 'pending' %}
+                                <span class="badge badge-warning">待入库</span>
+                            {% elif po.status == 'partial' %}
+                                <span class="badge badge-info">部分入库</span>
+                            {% endif %}
+                        </td>
+                        <td class="font-semibold">¥{{ po.total_amount }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var selectedCodes = [];
+
+// 解析防窜货码
+// 字符串递增函数（处理大数字，保留前导零）
+function incrementString(str) {
+    const originalLength = str.length;
+    
+    let result = '';
+    let carry = 1;
+    
+    for (let i = str.length - 1; i >= 0; i--) {
+        const digit = parseInt(str[i]) + carry;
+        if (digit >= 10) {
+            result = '0' + result;
+            carry = 1;
+        } else {
+            result = digit.toString() + result;
+            carry = 0;
+        }
+    }
+    
+    if (carry > 0) {
+        result = '1' + result;
+    }
+    
+    // 保持原始长度，不足则补前导零
+    if (result.length < originalLength) {
+        result = result.padStart(originalLength, '0');
+    }
+    
+    return result;
+}
+
+function parseBatchCodes() {
+    const input = document.getElementById('batch_codes_input').value.trim();
+    if (!input) {
+        alert('请输入防窜货码');
+        return;
+    }
+
+    const result = parseBarcodeContent(input);
+    const displayDiv = document.getElementById('parsedCodesDisplay');
+    const codesList = document.getElementById('codesList');
+    const hiddenInput = document.getElementById('batch_codes');
+
+    if (result.type === 'range') {
+        // 使用 count 而不是生成所有码（避免大数量时性能问题）
+        const count = result.count;
+        
+        if (count > 10000) {
+            // 数量太大，只存储范围信息
+            selectedCodes = [`${result.prefix}${result.start}-${result.prefix}${result.end}`];
+        } else {
+            // 生成所有码（包含前缀）
+            const codes = [];
+            let current = result.start;
+            
+            for (let i = 0; i < count; i++) {
+                codes.push(result.prefix + current);
+                current = incrementString(current);
+            }
+            
+            selectedCodes = codes;
+        }
+        
+        updateCodesDisplay();
+        document.getElementById('quantity').value = count;
+        alert(`解析成功！码段：${result.prefix}${result.start}-${result.prefix}${result.end}，共 ${count} 个码`);
+    } else if (result.type === 'single') {
+        selectedCodes = [result.codes[0]];
+        updateCodesDisplay();
+        document.getElementById('quantity').value = 1;
+        alert(`解析成功！单个码：${result.codes[0]}`);
+    } else if (result.type === 'multiple') {
+        selectedCodes = result.codes;
+        updateCodesDisplay();
+        document.getElementById('quantity').value = result.codes.length;
+        alert(`解析成功！${result.codes.length} 个码`);
+    } else {
+        alert('无法解析条形码格式，请检查输入！支持格式：WSSPC100001-WSSPC100500 或 100001-100500');
+    }
+}
+
+// 安全的大整数相减函数
+function safeSubtract(a, b) {
+    // 使用字符串处理大整数相减
+    const strA = String(a);
+    const strB = String(b);
+    
+    // 如果数字较小，直接使用 parseInt
+    if (strA.length <= 15 && strB.length <= 15) {
+        return parseInt(a) - parseInt(b);
+    }
+    
+    // 大整数处理
+    let result = '';
+    let borrow = 0;
+    let i = strA.length - 1;
+    let j = strB.length - 1;
+    
+    while (i >= 0 || j >= 0) {
+        const digitA = i >= 0 ? parseInt(strA[i]) : 0;
+        const digitB = j >= 0 ? parseInt(strB[j]) : 0;
+        let diff = digitA - digitB - borrow;
+        
+        if (diff < 0) {
+            diff += 10;
+            borrow = 1;
+        } else {
+            borrow = 0;
+        }
+        
+        result = diff.toString() + result;
+        i--;
+        j--;
+    }
+    
+    return parseInt(result);
+}
+
+// 比较两个数字字符串的大小
+function compareNumbers(a, b) {
+    const strA = String(a);
+    const strB = String(b);
+    
+    if (strA.length !== strB.length) {
+        return strA.length - strB.length;
+    }
+    
+    for (let i = 0; i < strA.length; i++) {
+        if (strA[i] !== strB[i]) {
+            return strA.charCodeAt(i) - strB.charCodeAt(i);
+        }
+    }
+    
+    return 0;
+}
+
+// 解析条形码内容
+function parseBarcodeContent(barcode) {
+    // 格式1: WSSPC66685584483001-WSSPC66685584489009 (前缀+数字-前缀+数字)
+    const rangePattern1 = /^([A-Za-z]+)(\d+)-([A-Za-z]+)(\d+)$/;
+    const match1 = barcode.match(rangePattern1);
+    
+    if (match1) {
+        const prefix1 = match1[1];
+        const prefix2 = match1[3];
+        const startStr = match1[2];
+        const endStr = match1[4];
+        
+        if (prefix1 === prefix2) {
+            // 使用字符串比较
+            const compareResult = compareNumbers(endStr, startStr);
+            
+            if (compareResult >= 0) {
+                // 计算数量
+                const count = safeSubtract(endStr, startStr) + 1;
+                return {
+                    type: 'range',
+                    prefix: prefix1,
+                    start: startStr,
+                    end: endStr,
+                    count: count
+                };
+            }
+        }
+    }
+
+    // 格式2: LYJYQEM100004000-LYJYQEM100005000 (简化版，使用反向引用)
+    const rangePattern2 = /^([A-Za-z]+)(\d+)-\1(\d+)$/;
+    const match2 = barcode.match(rangePattern2);
+    
+    if (match2) {
+        const startStr = match2[2];
+        const endStr = match2[3];
+        
+        const compareResult = compareNumbers(endStr, startStr);
+        
+        if (compareResult >= 0) {
+            const count = safeSubtract(endStr, startStr) + 1;
+            return {
+                type: 'range',
+                prefix: match2[1],
+                start: startStr,
+                end: endStr,
+                count: count
+            };
+        }
+    }
+
+    // 格式3: 100001-100500 (纯数字范围)
+    const rangePattern3 = /^(\d+)-(\d+)$/;
+    const match3 = barcode.match(rangePattern3);
+    
+    if (match3) {
+        const startStr = match3[1];
+        const endStr = match3[2];
+        
+        const compareResult = compareNumbers(endStr, startStr);
+        
+        if (compareResult >= 0) {
+            const count = safeSubtract(endStr, startStr) + 1;
+            return {
+                type: 'range',
+                prefix: '',
+                start: startStr,
+                end: endStr,
+                count: count
+            };
+        }
+    }
+
+    // 格式4: 逗号分隔的多个码
+    if (barcode.includes(',')) {
+        const codes = barcode.split(',').map(c => c.trim()).filter(c => c);
+        // 检查是否都是数字
+        const allNumeric = codes.every(c => /^\d+$/.test(c));
+        
+        if (allNumeric && codes.length > 0) {
+            return {
+                type: 'multiple',
+                codes: codes
+            };
+        }
+    }
+
+    // 格式5: 单个码
+    if (/^\d+$/.test(barcode)) {
+        return {
+            type: 'single',
+            codes: [barcode]
+        };
+    }
+
+    return { type: 'unknown' };
+}
+
+// 更新码段显示
+function updateCodesDisplay() {
+    const displayDiv = document.getElementById('parsedCodesDisplay');
+    const codesList = document.getElementById('codesList');
+    const hiddenInput = document.getElementById('batch_codes');
+
+    codesList.innerHTML = '';
+    
+    if (selectedCodes.length > 10) {
+        const sortedCodes = [...selectedCodes].sort((a, b) => parseInt(a) - parseInt(b));
+        const start = sortedCodes[0];
+        const end = sortedCodes[sortedCodes.length - 1];
+        const tag = document.createElement('span');
+        tag.className = 'badge badge-primary';
+        tag.textContent = `${start}-${end} (${selectedCodes.length}个)`;
+        codesList.appendChild(tag);
+    } else {
+        selectedCodes.forEach(code => {
+            const tag = document.createElement('span');
+            tag.className = 'badge badge-primary';
+            tag.textContent = code;
+            codesList.appendChild(tag);
+        });
+    }
+
+    hiddenInput.value = selectedCodes.join(',');
+    displayDiv.style.display = 'block';
+}
+
+// 清空已解析的码
+function clearParsedCodes() {
+    selectedCodes = [];
+    document.getElementById('parsedCodesDisplay').style.display = 'none';
+    document.getElementById('batch_codes').value = '';
+    document.getElementById('batch_codes_input').value = '';
+}
+
+// 防重复提交标志
+var stockInSubmitting = false;
+
+// 表单提交处理（验证 + 防重复提交）
+(function() {
+    'use strict';
+    var form = document.getElementById('stockInForm');
+
+    form.addEventListener('submit', function(event) {
+        // 防重复提交
+        if (stockInSubmitting) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+        stockInSubmitting = true;
+
+        var quantityInput = document.getElementById('quantity');
+        var product = document.getElementById('product_id');
+        var warehouse = document.getElementById('warehouse_id');
+        var batchCodesInput = document.getElementById('batch_codes');
+
+        // 1. HTML5表单验证
+        if (!form.checkValidity()) {
+            stockInSubmitting = false;
+            event.preventDefault();
+            event.stopPropagation();
+            form.classList.add('was-validated');
+            return;
+        }
+
+        var quantity = parseInt(quantityInput.value) || 0;
+
+        // 2. 检查码段是否填写（必填）
+        if (!batchCodesInput.value || batchCodesInput.value.trim() === '') {
+            stockInSubmitting = false;
+            event.preventDefault();
+            event.stopPropagation();
+            alert('请填写防窜货码段！\n\n入库时必须填写完整的码段信息。');
+            document.getElementById('batch_codes_input').classList.add('is-invalid');
+            return;
+        }
+
+        // 3. 检查防窜货码数量与入库数量是否一致
+        var codesCount = batchCodesInput.value.split(',').length;
+        if (quantity !== codesCount) {
+            stockInSubmitting = false;
+            event.preventDefault();
+            event.stopPropagation();
+            alert('入库数量(' + quantity + ')与防窜货码数量(' + codesCount + ')不一致，请核对后再入库！');
+            quantityInput.classList.add('is-invalid');
+            return;
+        }
+
+        // 不使用confirm弹窗，直接提交（避免阻塞导致表单无法提交）
+        form.classList.add('was-validated');
+    }, false);
+})();
+
+// 回车键解析
+document.getElementById('batch_codes_input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        parseBatchCodes();
+    }
+});
+
+// 选择商品后自动填充价格
+document.getElementById('product_id').addEventListener('change', function() {
+    var selectedOption = this.options[this.selectedIndex];
+    var priceInfo = document.getElementById('productPriceInfo');
+
+    if (this.value) {
+        var costPrice = selectedOption.getAttribute('data-cost-price') || 0;
+        var sellingPrice = selectedOption.getAttribute('data-selling-price') || 0;
+
+        // 显示价格信息
+        document.getElementById('productCostPrice').textContent = parseFloat(costPrice).toFixed(2);
+        document.getElementById('productSellingPrice').textContent = parseFloat(sellingPrice).toFixed(2);
+        priceInfo.style.display = 'block';
+
+        // 自动填充单位成本
+        if (parseFloat(costPrice) > 0) {
+            document.getElementById('unit_cost').value = parseFloat(costPrice).toFixed(2);
+        }
+    } else {
+        priceInfo.style.display = 'none';
+    }
+});
+
+// 当手动修改入库数量时，检查与防窜货码数量是否匹配
+document.getElementById('quantity').addEventListener('change', function() {
+    var quantity = parseInt(this.value) || 0;
+    var batchCodesInput = document.getElementById('batch_codes');
+
+    if (batchCodesInput.value) {
+        var codesCount = batchCodesInput.value.split(',').length;
+        if (quantity !== codesCount) {
+            this.classList.add('border-warning');
+            alert(`警告：入库数量(${quantity})与防窜货码数量(${codesCount})不一致！`);
+        } else {
+            this.classList.remove('border-warning');
+        }
+    }
+});
+
+// 有效期计算
+function calculateValidity() {
+    var productionDate = document.getElementById('production_date').value;
+    var expireDate = document.getElementById('expire_date').value;
+    var preview = document.getElementById('validityPreview');
+
+    if (!productionDate || !expireDate) {
+        preview.textContent = '填写日期后自动计算';
+        preview.className = 'form-control-plaintext text-muted';
+        return;
+    }
+
+    var prod = new Date(productionDate);
+    var exp = new Date(expireDate);
+
+    if (exp <= prod) {
+        preview.textContent = '过期日期必须晚于生产日期';
+        preview.className = 'form-control-plaintext text-danger';
+        return;
+    }
+
+    var diffTime = exp - prod;
+    var totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // 计算距离今天的天数
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var daysRemaining = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+
+    // 根据剩余天数设置颜色和文字
+    var colorClass = 'text-success';
+    var warningIcon = '';
+    var remainingText = '';
+    
+    if (daysRemaining <= 0) {
+        colorClass = 'text-dark';
+        warningIcon = '<i class="fas fa-exclamation-circle me-1"></i>';
+        remainingText = `已过期 ${Math.abs(daysRemaining)} 天`;
+    } else if (daysRemaining <= 30) {
+        colorClass = 'text-danger';
+        warningIcon = '<i class="fas fa-exclamation-circle me-1"></i>';
+        remainingText = `仅剩 ${daysRemaining} 天`;
+    } else if (daysRemaining <= 90) {
+        colorClass = 'text-warning';
+        warningIcon = '<i class="fas fa-exclamation-triangle me-1"></i>';
+        remainingText = `${daysRemaining} 天后过期`;
+    } else if (daysRemaining <= 180) {
+        colorClass = 'text-info';
+        remainingText = `${daysRemaining} 天后过期`;
+    } else {
+        remainingText = `${daysRemaining} 天后过期`;
+    }
+
+    preview.innerHTML = `${warningIcon}有效期：<strong>${totalDays}</strong> 天 | 剩余：<strong class="${colorClass}">${remainingText}</strong>`;
+}
+
+// 监听日期变化
+document.getElementById('production_date').addEventListener('change', calculateValidity);
+document.getElementById('expire_date').addEventListener('change', calculateValidity);
+</script>
+{% endblock %}

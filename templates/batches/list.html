@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}批次管理 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <div>
+        <a href="{{ url_for('batches.add') }}" class="btn btn-success">
+            <i class="fas fa-plus me-1"></i>添加批次
+        </a>
+    </div>
+</div>
+
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-2">
+                <input type="text" name="search" class="form-control" placeholder="批次号/商品名称..." value="{{ search }}">
+            </div>
+            <div class="col-md-2">
+                <select name="warehouse_id" class="form-select">
+                    <option value="0">全部仓库</option>
+                    {% for w in warehouses %}
+                    <option value="{{ w.id }}" {% if warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="product_id" class="form-select">
+                    <option value="0">全部商品</option>
+                    {% for p in products %}
+                    <option value="{{ p.id }}" {% if product_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="status" class="form-select">
+                    <option value="">全部状态</option>
+                    <option value="active" {% if status == 'active' %}selected{% endif %}>可用</option>
+                    <option value="depleted" {% if status == 'depleted' %}selected{% endif %}>已用完</option>
+                    <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>已作废</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-outline-primary">
+                    <i class="fas fa-search me-1"></i>筛选
+                </button>
+                <a href="{{ url_for('batches.list') }}" class="btn btn-outline-secondary">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>批次号</th>
+                        <th>商品</th>
+                        <th>仓库</th>
+                        <th>码段</th>
+                        <th>入库数量</th>
+                        <th>剩余数量</th>
+                        <th>成本价</th>
+                        <th>状态</th>
+                        <th>入库时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for batch in batches %}
+                    <tr>
+                        <td><code>{{ batch.batch_no }}</code></td>
+                        <td>
+                            <div>{{ batch.product.name }}</div>
+                            <small class="text-muted">{{ batch.product.sku }}</small>
+                        </td>
+                        <td>{{ batch.warehouse.name }}</td>
+                        <td><code>{{ batch.code_start }}-{{ batch.code_end }}</code></td>
+                        <td class="text-center">{{ batch.total_quantity }}</td>
+                        <td class="text-center">
+                            <span class="badge {% if batch.remaining_quantity > 0 %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ batch.remaining_quantity }}
+                            </span>
+                        </td>
+                        <td>¥{{ batch.cost_price }}</td>
+                        <td>
+                            {% if batch.status == 'active' %}
+                                <span class="badge bg-success">可用</span>
+                            {% elif batch.status == 'depleted' %}
+                                <span class="badge bg-secondary">已用完</span>
+                            {% else %}
+                                <span class="badge bg-danger">已作废</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ batch.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            <a href="{{ url_for('batches.codes', id=batch.id) }}" class="btn btn-sm btn-outline-primary" title="查看码明细">
+                                <i class="fas fa-list"></i>
+                            </a>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteBatch({{ batch.id }}, '{{ batch.batch_no }}')" title="删除">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-4">
+                            <i class="fas fa-inbox fa-3x mb-3"></i>
+                            <p>暂无批次数据</p>
+                            <a href="{{ url_for('batches.add') }}" class="btn btn-primary btn-sm">添加第一个批次</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if pagination.pages > 1 %}
+        <nav>
+            <ul class="pagination justify-content-center">
+                {% if pagination.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('batches.list', page=pagination.prev_num, search=search, warehouse_id=warehouse_id, product_id=product_id, status=status) }}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for p in pagination.iter_pages() %}
+                    {% if p %}
+                        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('batches.list', page=p, search=search, warehouse_id=warehouse_id, product_id=product_id, status=status) }}">{{ p }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagination.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('batches.list', page=pagination.next_num, search=search, warehouse_id=warehouse_id, product_id=product_id, status=status) }}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function deleteBatch(id, batchNo) {
+    if (confirm(`确定要删除批次"${batchNo}"吗？`)) {
+        $.ajax({
+            url: `/batches/delete/${id}`,
+            method: 'POST',
+            success: function(res) {
+                if (res.success) {
+                    alert('删除成功');
+                    location.reload();
+                } else {
+                    alert('删除失败：' + res.message);
+                }
+            }
+        });
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}利润表 - 财务报表 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <div>
+        <button class="btn btn-primary" onclick="printReport()">
+            <i class="fas fa-print me-1"></i>打印报表
+        </button>
+        <a href="{{ url_for('finance.export_profit_report', start_date=start_date, end_date=end_date, warehouse_id=warehouse_id) }}" class="btn btn-info text-white">
+            <i class="fas fa-file-excel me-1"></i>导出Excel
+        </a>
+    </div>
+</div>
+
+<!-- 筛选条件 -->
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">开始日期</label>
+                <input type="date" name="start_date" class="form-control" value="{{ start_date }}"
+                       onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">结束日期</label>
+                <input type="date" name="end_date" class="form-control" value="{{ end_date }}"
+                       onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">仓库</label>
+                <select name="warehouse_id" class="form-select">
+                    <option value="0">全部仓库</option>
+                    {% for w in warehouses %}
+                    <option value="{{ w.id }}" {% if warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-outline-primary">
+                    <i class="fas fa-search me-1"></i>查询
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 利润表内容 -->
+<div class="card shadow" id="reportContent">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0 text-center">利润表</h4>
+        <p class="mb-0 text-center">报表期间: {{ start_date }} 至 {{ end_date }}</p>
+    </div>
+    <div class="card-body">
+        <table class="table table-bordered">
+            <thead class="table-light">
+                <tr>
+                    <th>项目</th>
+                    <th class="text-end">本期金额</th>
+                    <th class="text-end">累计金额</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="3" class="table-primary"><strong>一、主营业务</strong></td>
+                </tr>
+                <tr>
+                    <td style="padding-left: 30px;">销售收入</td>
+                    <td class="text-end text-success"><strong>¥{{ sales_revenue }}</strong></td>
+                    <td class="text-end">-</td>
+                </tr>
+                <tr>
+                    <td style="padding-left: 30px;">减：销售成本</td>
+                    <td class="text-end text-danger">¥{{ purchase_cost }}</td>
+                    <td class="text-end">-</td>
+                </tr>
+                <tr>
+                    <td style="padding-left: 30px;"><strong>毛利润</strong></td>
+                    <td class="text-end"><strong class="{% if gross_profit >= 0 %}text-success{% else %}text-danger{% endif %}">¥{{ gross_profit }}</strong></td>
+                    <td class="text-end">-</td>
+                </tr>
+                <tr>
+                    <td colspan="3" class="table-secondary"><strong>二、其他业务</strong></td>
+                </tr>
+                <tr>
+                    <td style="padding-left: 30px;">其他收入</td>
+                    <td class="text-end text-success">¥{{ other_income }}</td>
+                    <td class="text-end">-</td>
+                </tr>
+                <tr>
+                    <td style="padding-left: 30px;">减：其他支出</td>
+                    <td class="text-end text-danger">¥{{ other_expense }}</td>
+                    <td class="text-end">-</td>
+                </tr>
+                <tr>
+                    <td colspan="3" class="table-warning"><strong>三、营业利润</strong></td>
+                </tr>
+                <tr>
+                    <td><strong>营业利润 = 毛利润 + 其他收入 - 其他支出</strong></td>
+                    <td class="text-end">
+                        <h4 class="mb-0 {% if operating_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            <strong>¥{{ operating_profit }}</strong>
+                        </h4>
+                    </td>
+                    <td class="text-end">-</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <p><strong>毛利率：</strong>
+                    {% if sales_revenue > 0 %}
+                        {{ ((gross_profit / sales_revenue) * 100)|round(2) }}%
+                    {% else %}
+                        -
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-md-6 text-end">
+                <p><strong>报表生成时间：</strong>{{ today }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function printReport() {
+    const printContent = document.getElementById('reportContent').innerHTML;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+        <head>
+            <title>利润表 - ${new Date().toLocaleDateString()}</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                .text-end { text-align: right; }
+                .text-success { color: #198754; }
+                .text-danger { color: #dc3545; }
+            </style>
+        </head>
+        <body>${printContent}</body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+}
+</script>
+{% endblock %}

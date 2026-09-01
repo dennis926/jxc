@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}收款 - 财务模块 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('finance.receivables') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+{% if receivable %}
+<div class="card shadow mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-file-invoice me-2"></i>应收单信息</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <p><strong>单号：</strong>{{ receivable.transaction_no }}</p>
+            </div>
+            <div class="col-md-4">
+                <p><strong>客户名称：</strong>{{ receivable.customer_name }}</p>
+            </div>
+            <div class="col-md-4">
+                <p><strong>收货地址：</strong>{{ receivable.customer_address or '-' }}</p>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-4">
+                <p><strong>应收金额：</strong><span class="text-primary h5">¥{{ receivable.amount }}</span></p>
+            </div>
+            <div class="col-md-4">
+                <p><strong>已收金额：</strong><span class="text-success">¥{{ receivable.paid_amount }}</span></p>
+            </div>
+            <div class="col-md-4">
+                <p><strong>待收金额：</strong><span class="text-warning h5">¥{{ receivable.pending_amount }}</span></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="fas fa-hand-holding-usd me-2"></i>收款信息</h5>
+    </div>
+    <div class="card-body">
+        <form id="collectForm" method="POST">
+            <input type="hidden" name="receivable_id" value="{{ receivable.id }}">
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">收款金额 <span class="text-danger">*</span></label>
+                    <input type="number" name="collect_amount" id="collectAmount" class="form-control" 
+                           step="0.01" min="0.01" max="{{ receivable.pending_amount }}" 
+                           value="{{ receivable.pending_amount }}" required>
+                    <div class="form-text">待收金额: ¥{{ receivable.pending_amount }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">收款账户 <span class="text-danger">*</span></label>
+                    <select name="account_id" class="form-select" required>
+                        <option value="">请选择账户</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.id }}">{{ account.name }} (余额: ¥{{ account.current_balance }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">付款方式</label>
+                    <select name="payment_method" class="form-select">
+                        <option value="">请选择</option>
+                        <option value="cash">现金</option>
+                        <option value="bank">银行转账</option>
+                        <option value="card">刷卡</option>
+                        <option value="alipay">支付宝</option>
+                        <option value="wechat">微信</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">备注</label>
+                <textarea name="remark" class="form-control" rows="3" placeholder="请输入备注信息"></textarea>
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-check me-1"></i>确认收款
+                </button>
+                <a href="{{ url_for('finance.receivables') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    未找到应收记录
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#collectForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const amount = parseFloat($('#collectAmount').val());
+        const maxAmount = {{ receivable.pending_amount if receivable else 0 }};
+        
+        if (amount > maxAmount) {
+            alert('收款金额不能超过待收金额');
+            return;
+        }
+        
+        $.ajax({
+            url: '{{ url_for("finance.collect_receivable") }}',
+            method: 'POST',
+            data: $(this).serialize(),
+            success: function(res) {
+                if (res.success) {
+                    alert('收款成功');
+                    window.location.href = '{{ url_for("finance.receivables") }}';
+                } else {
+                    alert('收款失败：' + res.message);
+                }
+            },
+            error: function() {
+                alert('收款失败');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

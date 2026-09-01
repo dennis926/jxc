@@ -1,0 +1,317 @@
+/* ========================================
+   错误页专用样式 v1.0
+   设计原则：与系统设计令牌保持一致（主色 #2563eb / 8px 网格 / Inter）
+   适用：400 / 403 / 404 / 429 / 500
+   说明：错误页为独立整页渲染，不依赖 base.html 的侧边栏布局，
+        因此此文件自带一份最小化的令牌定义，可脱离 modern-style.css 使用。
+   ======================================== */
+
+:root {
+    --err-primary: #2563eb;
+    --err-primary-dark: #1d4ed8;
+    --err-primary-subtle: #eff6ff;
+
+    --err-warning: #f59e0b;
+    --err-warning-subtle: #fffbeb;
+    --err-danger: #ef4444;
+    --err-danger-subtle: #fef2f2;
+    --err-info: #06b6d4;
+    --err-success: #10b981;
+
+    --err-gray-50: #f9fafb;
+    --err-gray-100: #f3f4f6;
+    --err-gray-200: #e5e7eb;
+    --err-gray-300: #d1d5db;
+    --err-gray-400: #9ca3af;
+    --err-gray-500: #6b7280;
+    --err-gray-600: #4b5563;
+    --err-gray-700: #374151;
+    --err-gray-800: #1f2937;
+    --err-gray-900: #111827;
+
+    --err-radius: 8px;
+    --err-radius-lg: 12px;
+    --err-radius-xl: 16px;
+
+    --err-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                'Microsoft YaHei', 'PingFang SC', sans-serif;
+    --err-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+body.error-page {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    font-family: var(--err-font);
+    color: var(--err-gray-900);
+    background-color: var(--err-gray-50);
+    /* 极淡的点阵底纹，替代过时的紫色大渐变 */
+    background-image:
+        radial-gradient(circle at 1px 1px, var(--err-gray-200) 1px, transparent 0);
+    background-size: 24px 24px;
+    line-height: 1.5;
+}
+
+/* 顶部细进度条式装饰，暗示"系统正常，只是被限流" */
+.error-topline {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg,
+        var(--err-primary) 0%, var(--err-info) 50%, var(--err-primary) 100%);
+    z-index: 10;
+}
+
+/* ========== 卡片 ========== */
+.error-card {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    background: #ffffff;
+    border: 1px solid var(--err-gray-200);
+    border-radius: var(--err-radius-xl);
+    padding: 40px;
+    /* 分层柔和阴影，避免"一坨黑影" */
+    box-shadow:
+        0 1px 2px rgba(16, 24, 40, 0.04),
+        0 4px 8px -2px rgba(16, 24, 40, 0.06),
+        0 24px 48px -12px rgba(16, 24, 40, 0.10);
+    animation: err-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes err-enter {
+    from { opacity: 0; transform: translateY(12px) scale(0.99); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ========== 头部：图标 + 状态码 ========== */
+.error-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 28px;
+}
+
+.error-badge {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--err-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+.error-badge.is-warning { background: var(--err-warning-subtle); color: var(--err-warning); }
+.error-badge.is-danger  { background: var(--err-danger-subtle);  color: var(--err-danger); }
+.error-badge.is-info    { background: var(--err-primary-subtle); color: var(--err-primary); }
+
+.error-code {
+    font-family: var(--err-font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--err-gray-400);
+    display: block;
+    margin-bottom: 2px;
+}
+
+.error-title {
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--err-gray-900);
+    margin: 0;
+}
+
+/* ========== 正文 ========== */
+.error-body { margin-bottom: 28px; }
+
+.error-desc {
+    font-size: 14px;
+    color: var(--err-gray-600);
+    margin: 0 0 4px;
+}
+
+/* ========== 倒计时区 ========== */
+.retry-panel {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: var(--err-gray-50);
+    border: 1px solid var(--err-gray-200);
+    border-radius: var(--err-radius-lg);
+    margin-top: 20px;
+}
+
+/* SVG 环形进度 */
+.retry-ring { flex: 0 0 auto; width: 52px; height: 52px; position: relative; }
+.retry-ring svg { transform: rotate(-90deg); display: block; }
+.retry-ring-track { stroke: var(--err-gray-200); }
+.retry-ring-fill {
+    stroke: var(--err-primary);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear;
+}
+.retry-ring-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--err-font-mono);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--err-gray-800);
+    font-variant-numeric: tabular-nums;
+}
+
+.retry-text { min-width: 0; }
+.retry-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--err-gray-800);
+    margin: 0 0 2px;
+}
+.retry-hint {
+    font-size: 12px;
+    color: var(--err-gray-500);
+    margin: 0;
+}
+
+/* 冷却结束状态 */
+.retry-panel.is-ready {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+.retry-panel.is-ready .retry-ring-fill { stroke: var(--err-success); }
+.retry-panel.is-ready .retry-label { color: #15803d; }
+
+/* ========== 按钮 ========== */
+.error-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.err-btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+    height: 40px;
+    padding: 0 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: var(--err-radius);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.err-btn-primary {
+    background: var(--err-primary);
+    color: #ffffff;
+}
+.err-btn-primary:hover { background: var(--err-primary-dark); color: #fff; }
+
+.err-btn-primary[aria-disabled="true"] {
+    background: var(--err-gray-200);
+    color: var(--err-gray-400);
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.err-btn-ghost {
+    background: #ffffff;
+    color: var(--err-gray-700);
+    border-color: var(--err-gray-300);
+}
+.err-btn-ghost:hover {
+    background: var(--err-gray-50);
+    color: var(--err-gray-900);
+}
+
+/* 键盘可达的清晰焦点环 */
+.err-btn:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--err-primary);
+    outline-offset: 2px;
+}
+
+/* ========== 页脚提示 ========== */
+.error-foot {
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid var(--err-gray-200);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--err-gray-500);
+}
+.error-foot i { color: var(--err-gray-400); margin-top: 2px; }
+.error-foot p { margin: 0; }
+
+/* ========== 响应式 ========== */
+@media (max-width: 480px) {
+    body.error-page { padding: 16px; }
+    .error-card { padding: 28px 22px; border-radius: var(--err-radius-lg); }
+    .error-title { font-size: 17px; }
+    .error-actions { flex-direction: column; }
+    .err-btn { width: 100%; flex: none; }
+}
+
+/* ========== 无障碍：尊重减少动效偏好 ========== */
+@media (prefers-reduced-motion: reduce) {
+    .error-card { animation: none; }
+    .retry-ring-fill { transition: none; }
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ========== 深色模式跟随系统 ========== */
+@media (prefers-color-scheme: dark) {
+    body.error-page {
+        background-color: #0b0f19;
+        color: #f3f4f6;
+        background-image:
+            radial-gradient(circle at 1px 1px, #1f2937 1px, transparent 0);
+    }
+    .error-card {
+        background: #111827;
+        border-color: #1f2937;
+        box-shadow:
+            0 1px 2px rgba(0,0,0,0.3),
+            0 24px 48px -12px rgba(0,0,0,0.5);
+    }
+    .error-title { color: #f9fafb; }
+    .error-desc  { color: #9ca3af; }
+    .retry-panel { background: #0b0f19; border-color: #1f2937; }
+    .retry-ring-track { stroke: #1f2937; }
+    .retry-ring-num { color: #e5e7eb; }
+    .retry-label { color: #e5e7eb; }
+    .retry-hint  { color: #6b7280; }
+    .retry-panel.is-ready { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.3); }
+    .retry-panel.is-ready .retry-label { color: #34d399; }
+    .err-btn-ghost {
+        background: #111827;
+        color: #d1d5db;
+        border-color: #374151;
+    }
+    .err-btn-ghost:hover { background: #1f2937; color: #f9fafb; }
+    .err-btn-primary[aria-disabled="true"] { background: #1f2937; color: #4b5563; }
+    .error-foot { border-color: #1f2937; color: #6b7280; }
+}

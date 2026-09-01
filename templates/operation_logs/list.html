@@ -1,0 +1,624 @@
+{% extends "base.html" %}
+
+{% block title %}操作日志 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<!-- 页面标题 -->
+<div class="page-header">
+    <div class="page-header-title">
+        <i class="fas fa-history"></i>
+        <span>操作日志</span>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-4">
+        <!-- 筛选条件 -->
+        <form method="GET" class="mb-4">
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label class="form-label">用户名</label>
+                        <input type="text" class="form-control" name="username" value="{{ filters.username }}" placeholder="输入用户名">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label class="form-label">操作类型</label>
+                        <select class="form-control" name="operation_type">
+                            <option value="">全部</option>
+                            {% for type_code, type_name in operation_types %}
+                            <option value="{{ type_code }}" {% if filters.operation_type == type_code %}selected{% endif %}>{{ type_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label class="form-label">模块</label>
+                        <select class="form-control" name="module">
+                            <option value="">全部</option>
+                            {% for module_code, module_name in modules %}
+                            <option value="{{ module_code }}" {% if filters.module == module_code %}selected{% endif %}>{{ module_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label class="form-label">开始日期</label>
+                        <input type="date" class="form-control" name="start_date" value="{{ filters.start_date }}"
+                               onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label class="form-label">结束日期</label>
+                        <input type="date" class="form-control" name="end_date" value="{{ filters.end_date }}"
+                               onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label class="form-label">关联单号</label>
+                        <input type="text" class="form-control" name="reference_no" value="{{ filters.reference_no }}" placeholder="输入单号">
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i>
+                        <span>查询</span>
+                    </button>
+                </div>
+                <div class="col-auto">
+                    <a href="{{ url_for('operation_logs.list') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-redo"></i>
+                        <span>重置</span>
+                    </a>
+                </div>
+                <div class="col-auto ms-auto">
+                    <a href="{{ url_for('operation_logs.export', **filters) }}" class="btn btn-success">
+                        <i class="fas fa-file-excel"></i>
+                        <span>导出Excel</span>
+                    </a>
+                </div>
+            </div>
+        </form>
+
+        <!-- 日志表格 -->
+        {% if pagination.items %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th width="150">操作时间</th>
+                        <th width="100">用户</th>
+                        <th width="80">模块</th>
+                        <th width="80">操作类型</th>
+                        <th>操作描述</th>
+                        <th width="120">关联单号</th>
+                        <th width="120">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in pagination.items %}
+                    <tr>
+                        <td>
+                            <small>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '-' }}</small>
+                        </td>
+                        <td>{{ log.username or '-' }}</td>
+                        <td>
+                            {% for module_code, module_name in modules %}
+                                {% if module_code == log.module %}{{ module_name }}{% endif %}
+                            {% endfor %}
+                            {% if not log.module %}-{% endif %}
+                        </td>
+                        <td>
+                            {% set type_label = 'secondary' %}
+        {% if log.operation_type == 'login' %}{% set type_label = 'success' %}{% endif %}
+        {% if log.operation_type == 'logout' %}{% set type_label = 'info' %}{% endif %}
+        {% if log.operation_type == 'create' %}{% set type_label = 'primary' %}{% endif %}
+        {% if log.operation_type == 'update' %}{% set type_label = 'warning' %}{% endif %}
+        {% if log.operation_type == 'delete' %}{% set type_label = 'danger' %}{% endif %}
+        {% if log.operation_type == 'import' %}{% set type_label = 'info' %}{% endif %}
+        {% if log.operation_type == 'export' %}{% set type_label = 'info' %}{% endif %}
+        {% if log.operation_type == 'print' %}{% set type_label = 'info' %}{% endif %}
+        {% if log.operation_type == 'transfer' %}{% set type_label = 'primary' %}{% endif %}
+        {% if log.operation_type == 'stock_in' %}{% set type_label = 'success' %}{% endif %}
+        {% if log.operation_type == 'stock_out' %}{% set type_label = 'danger' %}{% endif %}
+        {% if log.operation_type == 'adjust' %}{% set type_label = 'warning' %}{% endif %}
+        {% if log.operation_type == 'collect' %}{% set type_label = 'success' %}{% endif %}
+        {% if log.operation_type == 'pay' %}{% set type_label = 'danger' %}{% endif %}
+        {% if log.operation_type == 'backup' %}{% set type_label = 'info' %}{% endif %}
+                        <span class="badge badge-{{ type_label }}">
+                                {% for type_code, type_name in operation_types %}
+                                    {% if type_code == log.operation_type %}{{ type_name }}{% endif %}
+                                {% endfor %}
+                                {% if not log.operation_type %}-{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <span title="{{ log.description }}">{{ log.description[:80] }}{% if log.description and log.description|length > 80 %}...{% endif %}</span>
+                        </td>
+                        <td>
+                            {% if log.reference_no %}
+                            <a href="javascript:void(0)" onclick="showLogDetail({{ log.id }})" class="text-primary fw-bold">
+                                <i class="fas fa-external-link-alt me-1"></i>
+                                {{ log.reference_no }}
+                            </a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-primary" onclick="showLogDetail({{ log.id }})" title="查看详情">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                {% if log.module == 'inventory' and (log.operation_type == 'stock_in' or log.operation_type == 'stock_out') %}
+                                <button class="btn btn-sm btn-outline-success" onclick="showBatchCodes({{ log.id }})" title="查看码段">
+                                    <i class="fas fa-barcode"></i>
+                                </button>
+                                {% endif %}
+                                {% if log.operation_type in ['create', 'update', 'delete', 'stock_in', 'stock_out', 'transfer'] %}
+                                <button class="btn btn-sm btn-outline-danger" onclick="rollbackOperation({{ log.id }})" title="撤销操作">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        {% if pagination.pages > 1 %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center mb-0">
+                {% if pagination.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('operation_logs.list', page=pagination.prev_num, **filters) }}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="fas fa-chevron-left"></i></span>
+                </li>
+                {% endif %}
+
+                {% for p in pagination.iter_pages(left_edge=1, left_current=2, right_current=2, right_edge=1) %}
+                    {% if p %}
+                        {% if p == pagination.page %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ p }}</span>
+                        </li>
+                        {% else %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('operation_logs.list', page=p, **filters) }}">{{ p }}</a>
+                        </li>
+                        {% endif %}
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagination.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('operation_logs.list', page=pagination.next_num, **filters) }}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="fas fa-chevron-right"></i></span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        <!-- 统计信息 -->
+        <div class="text-muted text-center mt-3">
+            <small>共 {{ pagination.total }} 条记录，当前第 {{ pagination.page }} 页，共 {{ pagination.pages }} 页</small>
+        </div>
+        {% else %}
+        <!-- 空状态 -->
+        <div class="empty-state">
+            <i class="fas fa-history"></i>
+            <h3>暂无操作日志</h3>
+            <p>系统操作记录将显示在这里</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 日志详情弹窗 -->
+<div class="modal fade" id="logDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle me-2"></i>
+                    操作日志详情
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="logDetailContent">
+                <!-- 内容会动态加载 -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 码段详情弹窗 -->
+<div class="modal fade" id="batchCodesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-barcode me-2"></i>
+                    码段详情
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="batchCodesContent">
+                <!-- 内容会动态加载 -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 撤销确认弹窗 -->
+<div class="modal fade" id="rollbackConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    确认撤销
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="rollbackMessage">确定要撤销此操作吗？</p>
+                <p class="text-danger" id="rollbackWarning" style="display: none;"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="confirmRollbackBtn" onclick="confirmRollback()">确认撤销</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const logData = {
+    {% for log in pagination.items %}
+    {{ log.id }}: {
+        id: {{ log.id }},
+        created_at: "{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '-' }}",
+        username: "{{ log.username or '-' }}",
+        module: "{{ log.module or '-' }}",
+        operation_type: "{{ log.operation_type or '-' }}",
+        description: "{{ log.description or '' | replace('\"', '\\\"') | replace('\n', '\\n') }}",
+        reference_no: "{{ log.reference_no or '-' }}",
+        reference_type: "{{ log.reference_type or '-' }}",
+        ip_address: "{{ log.ip_address or '-' }}",
+        request_url: "{{ log.request_url or '-' }}",
+        request_method: "{{ log.request_method or '-' }}",
+        before_data: {{ log.before_data | tojson if log.before_data else 'null' }},
+        after_data: {{ log.after_data | tojson if log.after_data else 'null' }}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+};
+
+function showLogDetail(logId) {
+    const log = logData[logId];
+    if (!log) return;
+    
+    const operationTypes = {
+        'login': '登录',
+        'logout': '登出',
+        'create': '创建',
+        'update': '更新',
+        'delete': '删除',
+        'import': '导入',
+        'export': '导出',
+        'view': '查看',
+        'approve': '审批',
+        'reject': '拒绝',
+        'print': '打印',
+        'transfer': '调拨',
+        'stock_in': '入库',
+        'stock_out': '出库',
+        'adjust': '调整',
+        'collect': '收款',
+        'pay': '付款',
+        'backup': '备份'
+    };
+    
+    const modules = {
+        'product': '商品',
+        'warehouse': '仓库',
+        'supplier': '供应商',
+        'customer': '客户',
+        'inventory': '库存',
+        'purchase': '采购',
+        'transaction': '出入库',
+        'finance': '财务',
+        'user': '用户',
+        'role': '角色',
+        'backup': '备份',
+        'system': '系统',
+        'auth': '认证'
+    };
+    
+    let typeBadge = 'secondary';
+    if (log.operation_type === 'login') typeBadge = 'success';
+    if (log.operation_type === 'logout') typeBadge = 'info';
+    if (log.operation_type === 'create') typeBadge = 'primary';
+    if (log.operation_type === 'update') typeBadge = 'warning';
+    if (log.operation_type === 'delete') typeBadge = 'danger';
+    if (log.operation_type === 'import') typeBadge = 'info';
+    if (log.operation_type === 'export') typeBadge = 'info';
+    if (log.operation_type === 'print') typeBadge = 'info';
+    if (log.operation_type === 'transfer') typeBadge = 'primary';
+    if (log.operation_type === 'stock_in') typeBadge = 'success';
+    if (log.operation_type === 'stock_out') typeBadge = 'danger';
+    if (log.operation_type === 'adjust') typeBadge = 'warning';
+    if (log.operation_type === 'collect') typeBadge = 'success';
+    if (log.operation_type === 'pay') typeBadge = 'danger';
+    if (log.operation_type === 'backup') typeBadge = 'info';
+    
+    let html = `
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="info-item">
+                    <label>操作时间</label>
+                    <div class="fw-bold">${log.created_at}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-item">
+                    <label>操作用户</label>
+                    <div class="fw-bold">${log.username}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-item">
+                    <label>模块</label>
+                    <div class="fw-bold">${modules[log.module] || log.module}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-item">
+                    <label>操作类型</label>
+                    <div><span class="badge badge-${typeBadge}">${operationTypes[log.operation_type] || log.operation_type}</span></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-item">
+                    <label>关联单号</label>
+                    <div class="fw-bold text-primary">${log.reference_no}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-item">
+                    <label>IP地址</label>
+                    <div class="fw-bold">${log.ip_address}</div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="info-item">
+                    <label>操作描述</label>
+                    <div class="bg-light p-3 rounded">${log.description || '-'}</div>
+                </div>
+            </div>
+    `;
+    
+    if (log.before_data || log.after_data) {
+        html += `<div class="col-12"><hr></div>`;
+        
+        if (log.before_data) {
+            html += `
+                <div class="col-12">
+                    <div class="info-item">
+                        <label>操作前数据</label>
+                        <div class="bg-danger bg-opacity-10 p-3 rounded">
+                            <pre class="mb-0 text-sm" style="max-height: 200px; overflow-y: auto;">${formatJson(log.before_data)}</pre>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (log.after_data) {
+            html += `
+                <div class="col-12">
+                    <div class="info-item">
+                        <label>操作后数据</label>
+                        <div class="bg-success bg-opacity-10 p-3 rounded">
+                            <pre class="mb-0 text-sm" style="max-height: 200px; overflow-y: auto;">${formatJson(log.after_data)}</pre>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    html += `
+            <div class="col-12">
+                <div class="info-item">
+                    <label>请求地址</label>
+                    <div class="text-muted text-break">${log.request_url}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('logDetailContent').innerHTML = html;
+    
+    const modal = new bootstrap.Modal(document.getElementById('logDetailModal'));
+    modal.show();
+}
+
+function formatJson(data) {
+    try {
+        const obj = typeof data === 'string' ? JSON.parse(data) : data;
+        return JSON.stringify(obj, null, 2);
+    } catch (e) {
+        return data;
+    }
+}
+
+function showBatchCodes(logId) {
+    const log = logData[logId];
+    if (!log) return;
+    
+    const afterData = typeof log.after_data === 'string' ? JSON.parse(log.after_data) : log.after_data;
+    const batchCodes = afterData && afterData.batch_codes ? afterData.batch_codes : [];
+    const batchNo = afterData && afterData.batch_no ? afterData.batch_no : '-';
+    
+    let html = `
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="info-item">
+                    <label>批次号</label>
+                    <div class="fw-bold">${batchNo}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-item">
+                    <label>码段数量</label>
+                    <div class="fw-bold">${Array.isArray(batchCodes) ? batchCodes.length : (typeof batchCodes === 'string' && batchCodes.split(',').filter(c => c.trim()).length || 0)}</div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="info-item">
+                    <label>码段列表</label>
+                    <div class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">
+    `;
+    
+    if (Array.isArray(batchCodes) && batchCodes.length > 0) {
+        html += '<div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-2">';
+        batchCodes.forEach(code => {
+            html += `<div class="col"><span class="badge bg-secondary text-white">${code}</span></div>`;
+        });
+        html += '</div>';
+    } else if (typeof batchCodes === 'string' && batchCodes.trim()) {
+        const codes = batchCodes.split(',').filter(c => c.trim());
+        if (codes.length > 0) {
+            html += '<div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-2">';
+            codes.forEach(code => {
+                html += `<div class="col"><span class="badge bg-secondary text-white">${code.trim()}</span></div>`;
+            });
+            html += '</div>';
+        } else {
+            html += '<p class="text-muted">暂无码段信息</p>';
+        }
+    } else {
+        html += '<p class="text-muted">暂无码段信息</p>';
+    }
+    
+    html += `
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('batchCodesContent').innerHTML = html;
+    
+    const modal = new bootstrap.Modal(document.getElementById('batchCodesModal'));
+    modal.show();
+}
+
+let currentRollbackLogId = null;
+let rollbackSubmitting = false;
+
+function rollbackOperation(logId) {
+    currentRollbackLogId = logId;
+    const log = logData[logId];
+    if (!log) return;
+    
+    document.getElementById('rollbackMessage').innerHTML = `确定要撤销此操作吗？<br><small class="text-muted">操作类型：${log.operation_type}</small>`;
+    document.getElementById('rollbackWarning').style.display = 'none';
+    
+    const modal = new bootstrap.Modal(document.getElementById('rollbackConfirmModal'));
+    modal.show();
+}
+
+function confirmRollback() {
+    if (!currentRollbackLogId || rollbackSubmitting) return;
+    rollbackSubmitting = true;
+    
+    const btn = document.getElementById('confirmRollbackBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>处理中...';
+    
+    fetch('/operation-logs/' + currentRollbackLogId + '/rollback', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            alert('撤销成功！');
+            window.location.reload();
+        } else {
+            document.getElementById('rollbackWarning').textContent = data.error || data.message || '撤销失败';
+            document.getElementById('rollbackWarning').style.display = 'block';
+            btn.disabled = false;
+            btn.innerHTML = '确认撤销';
+            rollbackSubmitting = false;
+        }
+    })
+    .catch(function(error) {
+        document.getElementById('rollbackWarning').textContent = '请求失败：' + error.message;
+        document.getElementById('rollbackWarning').style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = '确认撤销';
+        rollbackSubmitting = false;
+    });
+}
+</script>
+
+<style>
+.info-item {
+    margin-bottom: 1rem;
+}
+
+.info-item label {
+    display: block;
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+}
+
+.info-item > div {
+    font-size: 0.9375rem;
+}
+
+.text-sm {
+    font-size: 0.8125rem;
+}
+</style>
+{% endblock %}

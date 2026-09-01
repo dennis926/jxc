@@ -1,0 +1,1059 @@
+{% extends "base.html" %}
+
+{% block title %}出库操作 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('inventory.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回库存
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" class="needs-validation" id="stockOutForm" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="warehouse_id" class="form-label">出库仓库 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="warehouse_id" name="warehouse_id" required onchange="loadProductsByWarehouse()">
+                        <option value="">请选择仓库</option>
+                        {% for w in warehouses %}
+                        <option value="{{ w.id }}">{{ w.name }} ({{ w.code }})</option>
+                        {% endfor %}
+                    </select>
+                    <div class="invalid-feedback">请选择仓库</div>
+                </div>
+
+                <div class="col-md-6">
+                    <label for="product_id" class="form-label">出库商品 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="product_id" name="product_id" required>
+                        <option value="">请先选择仓库</option>
+                    </select>
+                    <div class="invalid-feedback">请选择商品</div>
+                </div>
+
+                <div class="col-md-4">
+                    <label for="customer_id" class="form-label">客户 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="customer_id" name="customer_id" required>
+                        <option value="">请选择客户</option>
+                        {% for c in customers %}
+                        <option value="{{ c.id }}">{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="invalid-feedback">请选择客户</div>
+                </div>
+                <div class="col-md-4">
+                    <label for="quantity" class="form-label">出库数量 <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="quantity" name="quantity"
+                           min="1" max="3000" required placeholder="请输入数量">
+                    <div class="invalid-feedback">请输入出库数量（1-3000）</div>
+                    <div class="form-text text-muted">单次出库最多3000个</div>
+                </div>
+                <div class="col-md-4">
+                    <label for="reference_no" class="form-label">关联单号</label>
+                    <input type="text" class="form-control" id="reference_no" name="reference_no"
+                           placeholder="如订单号">
+                </div>
+
+                <!-- 防窜货码输入区域 -->
+                <div class="col-12">
+                    <label class="form-label">
+                        <i class="fas fa-barcode me-2"></i>防窜货码（支持扫码或手动输入）
+                    </label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="batch_codes_input" 
+                               placeholder="扫描条形码或手动输入，如：LYJYQEM100004000-LYJYQEM100005000 或 100001-100500">
+                        <button type="button" class="btn btn-primary" onclick="parseBatchCodes()">
+                            <i class="fas fa-qrcode me-1"></i>解析
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="openCodeSelector()">
+                            <i class="fas fa-list me-1"></i>选择码段
+                        </button>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        <i class="fas fa-info-circle"></i> 支持格式：
+                        <code>LYJYQEM100004000-LYJYQEM100005000</code>（带前缀码段）或 
+                        <code>100001-100500</code>（纯数字范围）或 
+                        <code>100001,100002,100003</code>（逗号分隔）
+                    </small>
+                </div>
+
+                <!-- 已解析的码段显示 -->
+                <div class="col-12">
+                    <div id="parsedCodesDisplay" class="p-3 bg-light rounded" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-primary"><i class="fas fa-check-circle me-1"></i>已解析码段</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearParsedCodes()">
+                                <i class="fas fa-trash me-1"></i>清空
+                            </button>
+                        </div>
+                        <div id="codesList" class="flex-wrap d-flex gap-2"></div>
+                        <input type="hidden" id="batch_codes" name="batch_codes">
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <label for="operator" class="form-label">操作人 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="operator" name="operator"
+                           placeholder="请输入操作人" value="{{ session.get('real_name') or session.get('username', '') }}" required>
+                    <div class="invalid-feedback">请输入操作人</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="remark" class="form-label">备注</label>
+                    <input type="text" class="form-control" id="remark" name="remark"
+                           placeholder="请输入备注">
+                </div>
+            </div>
+            <div class="mt-4">
+                <button type="submit" class="btn btn-danger" id="submitBtn">
+                    <i class="fas fa-arrow-up me-1"></i>确认出库
+                </button>
+                <a href="{{ url_for('inventory.list') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-warning mt-3">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    <strong>注意：</strong>出库前请确认库存充足，出库数量不能超过当前库存。
+</div>
+
+<!-- 码段选择弹窗 -->
+<div class="modal fade" id="codeSelectorModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-check-square me-2"></i>选择出库码段</h5>
+                <div class="d-flex align-items-center gap-2 me-auto ms-3">
+                    <span class="text-muted small">排序：</span>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-primary active" id="sortAscBtn" onclick="changeSortOrder('asc')" title="数字从小到大">
+                            <i class="fas fa-sort-numeric-down"></i> 升序
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" id="sortDescBtn" onclick="changeSortOrder('desc')" title="数字从大到小">
+                            <i class="fas fa-sort-numeric-up"></i> 降序
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>商品：</strong><span id="modalProductName"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>需选数量：</strong><span id="modalQuantity" class="text-primary"></span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-success" onclick="autoSelectCodes()">
+                            <i class="fas fa-magic me-1"></i>自动分配（优先连续码段）
+                        </button>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <span class="badge bg-info">已选：<span id="modalSelectedCount">0</span> 个</span>
+                    </div>
+                </div>
+                <div id="batchAccordion" class="accordion"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="confirmCodeSelection()">
+                    <i class="fas fa-check me-1"></i>确认选择
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var selectedCodes = [];
+// 批次信息映射：{ batchId: { batch_no, warehouse_name } }
+var batchInfoMap = {};
+// 码段排序方向：'asc' | 'desc'，默认升序
+var sortOrder = 'asc';
+// 缓存当前码段数据，用于切换排序时重新渲染
+var currentBatchCodes = null;
+var currentWarehouseId = null;
+var currentMaxQuantity = 0;
+
+// 智能码段排序函数：提取数字部分按数字排序，纯字符串按字典序
+function smartSortCodes(codes, order) {
+    const sorted = [...codes].sort((a, b) => {
+        // 提取数字部分
+        const numA = parseInt(String(a).replace(/[^0-9]/g, ''));
+        const numB = parseInt(String(b).replace(/[^0-9]/g, ''));
+        if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+            return numA - numB;
+        }
+        return String(a).localeCompare(String(b));
+    });
+    return order === 'desc' ? sorted.reverse() : sorted;
+}
+
+// 切换排序方向
+function changeSortOrder(order) {
+    if (sortOrder === order) return;
+    sortOrder = order;
+    // 更新按钮状态
+    document.getElementById('sortAscBtn').classList.toggle('active', order === 'asc');
+    document.getElementById('sortDescBtn').classList.toggle('active', order === 'desc');
+    // 重新渲染（如果有缓存数据）
+    if (currentBatchCodes && currentBatchCodes.length > 0) {
+        renderBatchAccordion(currentBatchCodes, currentWarehouseId, currentMaxQuantity);
+    }
+}
+
+// 字符串递增函数（处理大数字）
+function incrementString(str) {
+    const originalLength = str.length;
+
+    let result = '';
+    let carry = 1;
+
+    for (let i = str.length - 1; i >= 0; i--) {
+        const digit = parseInt(str[i]) + carry;
+        if (digit >= 10) {
+            result = '0' + result;
+            carry = 1;
+        } else {
+            result = digit.toString() + result;
+            carry = 0;
+        }
+    }
+
+    if (carry > 0) {
+        result = '1' + result;
+    }
+
+    if (result.length < originalLength) {
+        result = result.padStart(originalLength, '0');
+    }
+
+    return result;
+}
+
+// 安全的大整数相减函数
+function safeSubtract(a, b) {
+    const strA = String(a);
+    const strB = String(b);
+    
+    if (strA.length <= 15 && strB.length <= 15) {
+        return parseInt(a) - parseInt(b);
+    }
+    
+    let result = '';
+    let borrow = 0;
+    let i = strA.length - 1;
+    let j = strB.length - 1;
+    
+    while (i >= 0 || j >= 0) {
+        const digitA = i >= 0 ? parseInt(strA[i]) : 0;
+        const digitB = j >= 0 ? parseInt(strB[j]) : 0;
+        let diff = digitA - digitB - borrow;
+        
+        if (diff < 0) {
+            diff += 10;
+            borrow = 1;
+        } else {
+            borrow = 0;
+        }
+        
+        result = diff.toString() + result;
+        i--;
+        j--;
+    }
+    
+    return parseInt(result);
+}
+
+// 比较两个数字字符串的大小
+function compareNumbers(a, b) {
+    const strA = String(a);
+    const strB = String(b);
+    
+    if (strA.length !== strB.length) {
+        return strA.length - strB.length;
+    }
+    
+    for (let i = 0; i < strA.length; i++) {
+        if (strA[i] !== strB[i]) {
+            return strA.charCodeAt(i) - strB.charCodeAt(i);
+        }
+    }
+    
+    return 0;
+}
+
+// 解析防窜货码
+function parseBatchCodes() {
+    const input = document.getElementById('batch_codes_input').value.trim();
+    if (!input) {
+        alert('请输入防窜货码');
+        return;
+    }
+
+    const result = parseBarcodeContent(input);
+    const displayDiv = document.getElementById('parsedCodesDisplay');
+    const codesList = document.getElementById('codesList');
+    const hiddenInput = document.getElementById('batch_codes');
+
+    if (result.type === 'range') {
+        const count = result.count;
+        
+        if (count > 10000) {
+            selectedCodes = [`${result.prefix}${result.start}-${result.prefix}${result.end}`];
+        } else {
+            const codes = [];
+            let current = result.start;
+            
+            for (let i = 0; i < count; i++) {
+                codes.push(result.prefix + current);
+                current = incrementString(current);
+            }
+            
+            selectedCodes = codes;
+        }
+        
+        updateCodesDisplay();
+        alert(`解析成功！码段：${result.prefix}${result.start}-${result.prefix}${result.end}，共 ${count} 个码`);
+    } else if (result.type === 'single') {
+        selectedCodes = [result.codes[0]];
+        updateCodesDisplay();
+        alert(`解析成功！单个码：${result.codes[0]}`);
+    } else if (result.type === 'multiple') {
+        selectedCodes = result.codes;
+        updateCodesDisplay();
+        alert(`解析成功！${result.codes.length} 个码`);
+    } else {
+        alert('无法解析条形码格式，请检查输入！支持格式：WSSPC100001-WSSPC100500 或 100001-100500');
+    }
+}
+
+// 解析条形码内容
+function parseBarcodeContent(barcode) {
+    // 格式1: WSSPC66685584483001-WSSPC66685584489009 (前缀+数字-前缀+数字)
+    const rangePattern1 = /^([A-Za-z]+)(\d+)-([A-Za-z]+)(\d+)$/;
+    const match1 = barcode.match(rangePattern1);
+    
+    if (match1) {
+        const prefix1 = match1[1];
+        const prefix2 = match1[3];
+        const startStr = match1[2];
+        const endStr = match1[4];
+        
+        if (prefix1 === prefix2) {
+            const compareResult = compareNumbers(endStr, startStr);
+            
+            if (compareResult >= 0) {
+                const count = safeSubtract(endStr, startStr) + 1;
+                return {
+                    type: 'range',
+                    prefix: prefix1,
+                    start: startStr,
+                    end: endStr,
+                    count: count
+                };
+            }
+        }
+    }
+
+    // 格式2: LYJYQEM100004000-LYJYQEM100005000 (简化版，使用反向引用)
+    const rangePattern2 = /^([A-Za-z]+)(\d+)-\1(\d+)$/;
+    const match2 = barcode.match(rangePattern2);
+    
+    if (match2) {
+        const startStr = match2[2];
+        const endStr = match2[3];
+        
+        const compareResult = compareNumbers(endStr, startStr);
+        
+        if (compareResult >= 0) {
+            const count = safeSubtract(endStr, startStr) + 1;
+            return {
+                type: 'range',
+                prefix: match2[1],
+                start: startStr,
+                end: endStr,
+                count: count
+            };
+        }
+    }
+
+    // 格式3: 100001-100500 (纯数字范围)
+    const rangePattern3 = /^(\d+)-(\d+)$/;
+    const match3 = barcode.match(rangePattern3);
+    
+    if (match3) {
+        const startStr = match3[1];
+        const endStr = match3[2];
+        
+        const compareResult = compareNumbers(endStr, startStr);
+        
+        if (compareResult >= 0) {
+            const count = safeSubtract(endStr, startStr) + 1;
+            return {
+                type: 'range',
+                prefix: '',
+                start: startStr,
+                end: endStr,
+                count: count
+            };
+        }
+    }
+
+    // 格式4: 逗号分隔的多个码
+    if (barcode.includes(',')) {
+        const codes = barcode.split(',').map(c => c.trim()).filter(c => c);
+        const allNumeric = codes.every(c => /^\d+$/.test(c));
+        
+        if (allNumeric && codes.length > 0) {
+            return {
+                type: 'multiple',
+                codes: codes
+            };
+        }
+    }
+
+    // 格式5: 单个码
+    if (/^\d+$/.test(barcode)) {
+        return {
+            type: 'single',
+            codes: [barcode]
+        };
+    }
+
+    return { type: 'unknown' };
+}
+
+// 更新码段显示
+function updateCodesDisplay() {
+    const displayDiv = document.getElementById('parsedCodesDisplay');
+    const codesList = document.getElementById('codesList');
+    const hiddenInput = document.getElementById('batch_codes');
+
+    codesList.innerHTML = '';
+
+    if (selectedCodes.length === 0) {
+        displayDiv.style.display = 'none';
+        return;
+    }
+
+    // 按批次分组收集已选码段
+    const batchCodes = {};
+    // 遍历所有DOM中的code-item，找出已选中的码段及其批次
+    document.querySelectorAll('.code-item.selected').forEach(el => {
+        const code = el.getAttribute('data-code');
+        const batchId = el.getAttribute('data-batch');
+        if (!batchCodes[batchId]) {
+            batchCodes[batchId] = [];
+        }
+        batchCodes[batchId].push(code);
+    });
+
+    // 按批次ID排序显示
+    const sortedBatchIds = Object.keys(batchCodes).sort((a, b) => parseInt(a) - parseInt(b));
+
+    sortedBatchIds.forEach(batchId => {
+        const codes = smartSortCodes(batchCodes[batchId], sortOrder);
+
+        const info = batchInfoMap[batchId] || { batch_no: '未知批次', warehouse_name: '' };
+
+        // 创建批次分组容器
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'mb-2 p-2 border rounded bg-white';
+
+        // 批次标题
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'd-flex align-items-center gap-2 mb-1';
+        titleDiv.innerHTML = `
+            <span class="badge bg-info text-dark"><i class="fas fa-layer-group me-1"></i>${info.batch_no}</span>
+            <span class="text-muted small">${info.warehouse_name}</span>
+            <span class="badge bg-primary">${codes.length} 个</span>
+        `;
+        groupDiv.appendChild(titleDiv);
+
+        // 码段范围显示
+        const codesDiv = document.createElement('div');
+        codesDiv.className = 'd-flex flex-wrap gap-1';
+
+        // 将连续码段合并为范围显示
+        let ranges = [];
+        let rangeStart = codes[0];
+        let rangeEnd = codes[0];
+
+        for (let i = 1; i < codes.length; i++) {
+            // 判断是否连续（数字差1或字符串递增1）
+            const isConsecutive = isSequential(rangeEnd, codes[i]);
+            if (isConsecutive) {
+                rangeEnd = codes[i];
+            } else {
+                ranges.push({ start: rangeStart, end: rangeEnd });
+                rangeStart = codes[i];
+                rangeEnd = codes[i];
+            }
+        }
+        ranges.push({ start: rangeStart, end: rangeEnd });
+
+        ranges.forEach(range => {
+            const tag = document.createElement('span');
+            tag.className = 'badge bg-primary';
+            if (range.start === range.end) {
+                tag.textContent = range.start;
+            } else {
+                tag.textContent = `${range.start} - ${range.end}`;
+            }
+            codesDiv.appendChild(tag);
+        });
+
+        groupDiv.appendChild(codesDiv);
+        codesList.appendChild(groupDiv);
+    });
+
+    // 添加总数统计
+    const countDiv = document.createElement('div');
+    countDiv.className = 'mt-2';
+    countDiv.innerHTML = `<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>共 ${selectedCodes.length} 个码段</span>`;
+    codesList.appendChild(countDiv);
+
+    hiddenInput.value = selectedCodes.join(',');
+    displayDiv.style.display = 'block';
+}
+
+// 判断两个码是否连续
+function isSequential(a, b) {
+    // 尝试数字比较
+    const numA = parseInt(a), numB = parseInt(b);
+    if (!isNaN(numA) && !isNaN(numB)) {
+        return numB - numA === 1;
+    }
+    // 字符串比较（简单处理）
+    return false;
+}
+
+// 清空已解析的码
+function clearParsedCodes() {
+    selectedCodes = [];
+    document.getElementById('parsedCodesDisplay').style.display = 'none';
+    document.getElementById('batch_codes').value = '';
+    document.getElementById('batch_codes_input').value = '';
+}
+
+// 打开码段选择器
+function openCodeSelector() {
+    const productId = document.getElementById('product_id').value;
+    const warehouseId = document.getElementById('warehouse_id').value;
+    const quantity = document.getElementById('quantity').value;
+
+    if (!productId) {
+        alert('请先选择商品');
+        return;
+    }
+
+    if (!quantity || quantity <= 0) {
+        alert('请先输入出库数量');
+        return;
+    }
+
+    document.getElementById('modalProductName').textContent =
+        document.getElementById('product_id').options[document.getElementById('product_id').selectedIndex].text;
+    document.getElementById('modalQuantity').textContent = quantity;
+
+    // 加载可用批次
+    loadAvailableBatches(productId, warehouseId, quantity);
+
+    // 使用Bootstrap Modal打开
+    const modalEl = document.getElementById('codeSelectorModal');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+// 加载可用批次
+function loadAvailableBatches(productId, warehouseId, quantity) {
+    fetch(`/batches/query-codes?product_id=${productId}&warehouse_id=${warehouseId}&quantity=${quantity}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.total_available === 0) {
+                    alert('该商品没有可用的批次码');
+                    return;
+                }
+                if (data.total_available < quantity) {
+                    alert(`警告：可用码数量(${data.total_available})少于出库数量(${quantity})`);
+                }
+                // 缓存数据用于切换排序
+                currentBatchCodes = data.codes;
+                currentWarehouseId = warehouseId;
+                currentMaxQuantity = quantity;
+                renderBatchAccordion(data.codes, warehouseId, quantity);
+            } else {
+                alert('获取可用码段失败: ' + (data.message || '未知错误'));
+            }
+        })
+        .catch(error => {
+            alert('加载失败：' + error);
+        });
+}
+
+// 渲染批次选择器
+function renderBatchAccordion(codes, warehouseId, maxQuantity) {
+    const accordion = document.getElementById('batchAccordion');
+    accordion.innerHTML = '';
+
+    // 按批次分组
+    const batches = {};
+    codes.forEach(code => {
+        if (!batches[code.batch_id]) {
+            batches[code.batch_id] = {
+                batch_no: code.batch_no,
+                warehouse_name: code.warehouse_name,
+                codes: []
+            };
+        }
+        // 对每个批次内的码段使用智能排序（按数字大小）
+        batches[code.batch_id].codes.push(code);
+    });
+
+    // 对每个批次内的码段应用智能排序
+    Object.keys(batches).forEach(batchId => {
+        batches[batchId].codes = smartSortCodes(
+            batches[batchId].codes.map(c => c.code),
+            sortOrder
+        ).map(codeStr => {
+            // 找回对应的完整对象
+            return batches[batchId].codes.find(c => c.code === codeStr) || { code: codeStr };
+        });
+    });
+
+    // 按批次排序（先进先出）
+    const sortedBatchIds = Object.keys(batches).sort((a, b) => parseInt(a) - parseInt(b));
+
+    // 存储批次信息映射
+    batchInfoMap = {};
+    sortedBatchIds.forEach(batchId => {
+        batchInfoMap[batchId] = {
+            batch_no: batches[batchId].batch_no,
+            warehouse_name: batches[batchId].warehouse_name
+        };
+    });
+
+    sortedBatchIds.forEach((batchId, index) => {
+        const batch = batches[batchId];
+        const accordionItem = document.createElement('div');
+        accordionItem.className = 'accordion-item';
+        
+        // 第一个批次默认展开
+        const isFirst = index === 0;
+        
+        accordionItem.innerHTML = `
+            <h2 class="accordion-header" id="heading${batchId}">
+                <button class="accordion-button ${isFirst ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${batchId}">
+                    <div class="d-flex w-100 justify-content-between align-items-center">
+                        <div>
+                            <strong>${batch.batch_no}</strong>
+                            <span class="badge bg-secondary ms-2">${batch.warehouse_name}</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2" onclick="event.stopPropagation()">
+                            <button type="button" class="btn btn-sm btn-outline-primary batch-select-btn" onclick="selectAllBatchCodes(${batchId}, this)" title="选中该批次全部码段">
+                                <i class="fas fa-check-double me-1"></i>选择
+                            </button>
+                            <span class="badge bg-success">${batch.codes.length} 可用</span>
+                        </div>
+                    </div>
+                </button>
+            </h2>
+            <div id="collapse${batchId}" class="accordion-collapse collapse ${isFirst ? 'show' : ''}" data-bs-parent="#batchAccordion">
+                <div class="accordion-body">
+                    <div class="code-grid" id="codesGrid${batchId}">
+                        ${batch.codes.map(c => `
+                            <div class="code-item" data-code="${c.code}" data-batch="${batchId}" onclick="toggleCode(this, ${maxQuantity})">
+                                ${c.code}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        accordion.appendChild(accordionItem);
+    });
+
+    selectedCodes = [];
+    document.getElementById('modalSelectedCount').textContent = '0';
+}
+
+// 切换码选择
+function toggleCode(element, maxQuantity) {
+    const code = element.getAttribute('data-code');
+    
+    if (element.classList.contains('selected')) {
+        element.classList.remove('selected');
+        selectedCodes = selectedCodes.filter(c => c !== code);
+    } else {
+        if (selectedCodes.length >= maxQuantity) {
+            alert(`最多只能选择 ${maxQuantity} 个码`);
+            return;
+        }
+        element.classList.add('selected');
+        selectedCodes.push(code);
+    }
+    
+    document.getElementById('modalSelectedCount').textContent = selectedCodes.length;
+}
+
+// 自动选择码（先进先出）
+function autoSelectCodes() {
+    const maxQuantity = parseInt(document.getElementById('modalQuantity').textContent);
+    
+    // 清除当前选择
+    document.querySelectorAll('.code-item.selected').forEach(el => {
+        el.classList.remove('selected');
+    });
+    selectedCodes = [];
+    
+    // 按批次顺序选择（先进先出）
+    let selected = 0;
+    const codeItems = document.querySelectorAll('.code-item');
+    
+    for (let el of codeItems) {
+        if (selected >= maxQuantity) break;
+        el.classList.add('selected');
+        selectedCodes.push(el.getAttribute('data-code'));
+        selected++;
+    }
+    
+    document.getElementById('modalSelectedCount').textContent = selectedCodes.length;
+}
+
+// 选择某个批次的全部码段
+function selectAllBatchCodes(batchId, btnElement) {
+    const maxQuantity = parseInt(document.getElementById('modalQuantity').textContent);
+    const codeItems = document.querySelectorAll(`.code-item[data-batch="${batchId}"]`);
+
+    // 计算当前已选数量
+    const currentSelected = selectedCodes.length;
+    // 计算还能选多少
+    const remaining = maxQuantity - currentSelected;
+
+    // 检查该批次是否已经全部选中
+    const allSelected = Array.from(codeItems).every(el => el.classList.contains('selected'));
+
+    if (allSelected) {
+        // 如果已全选，则取消该批次的选择
+        codeItems.forEach(el => {
+            const code = el.getAttribute('data-code');
+            el.classList.remove('selected');
+            selectedCodes = selectedCodes.filter(c => c !== code);
+        });
+        btnElement.innerHTML = '<i class="fas fa-check-double me-1"></i>选择';
+        btnElement.classList.remove('btn-primary');
+        btnElement.classList.add('btn-outline-primary');
+    } else {
+        // 如果已经达到上限，提示并返回
+        if (remaining <= 0) {
+            alert(`已达到需选数量上限 ${maxQuantity} 个，无法再选择更多码段`);
+            return;
+        }
+
+        // 选中该批次的码段，但不超过剩余可选数量
+        let selectedCount = 0;
+        codeItems.forEach(el => {
+            if (!el.classList.contains('selected') && selectedCount < remaining) {
+                el.classList.add('selected');
+                const code = el.getAttribute('data-code');
+                if (!selectedCodes.includes(code)) {
+                    selectedCodes.push(code);
+                    selectedCount++;
+                }
+            }
+        });
+
+        // 如果该批次还有未选中的码段，说明被截断了
+        const hasMoreUnselected = Array.from(codeItems).some(el => !el.classList.contains('selected'));
+
+        if (hasMoreUnselected) {
+            btnElement.innerHTML = '<i class="fas fa-check me-1"></i>部分';
+            btnElement.classList.remove('btn-outline-primary');
+            btnElement.classList.add('btn-warning');
+        } else {
+            btnElement.innerHTML = '<i class="fas fa-times me-1"></i>取消';
+            btnElement.classList.remove('btn-outline-primary');
+            btnElement.classList.add('btn-primary');
+        }
+    }
+
+    document.getElementById('modalSelectedCount').textContent = selectedCodes.length;
+
+    // 更新其他批次按钮状态
+    updateBatchButtonStates();
+}
+
+// 更新所有批次选择按钮的状态
+function updateBatchButtonStates() {
+    const maxQuantity = parseInt(document.getElementById('modalQuantity').textContent);
+
+    document.querySelectorAll('.batch-select-btn').forEach(btn => {
+        // 找到该按钮所在的accordion-item
+        const accordionItem = btn.closest('.accordion-item');
+        if (!accordionItem) return;
+        const codeItems = accordionItem.querySelectorAll('.code-item');
+        const selectedCount = Array.from(codeItems).filter(el => el.classList.contains('selected')).length;
+        const allSelected = selectedCount === codeItems.length;
+        const hasSelected = selectedCount > 0;
+
+        // 重置按钮样式
+        btn.classList.remove('btn-primary', 'btn-outline-primary', 'btn-warning');
+
+        if (allSelected) {
+            btn.innerHTML = '<i class="fas fa-times me-1"></i>取消';
+            btn.classList.add('btn-primary');
+        } else if (hasSelected) {
+            // 部分选中
+            btn.innerHTML = '<i class="fas fa-check me-1"></i>部分';
+            btn.classList.add('btn-warning');
+        } else {
+            btn.innerHTML = '<i class="fas fa-check-double me-1"></i>选择';
+            btn.classList.add('btn-outline-primary');
+        }
+    });
+}
+
+// 确认码选择
+function confirmCodeSelection() {
+    const quantity = parseInt(document.getElementById('modalQuantity').textContent);
+
+    if (selectedCodes.length === 0) {
+        alert('请至少选择 1 个码');
+        return;
+    }
+
+    // 如果选择的数量不足，提示用户
+    if (selectedCodes.length < quantity) {
+        if (!confirm(`需选数量为 ${quantity} 个，当前已选择 ${selectedCodes.length} 个，数量不足。是否继续？`)) {
+            return;
+        }
+    }
+
+    // 更新出库数量为实际选择的数量
+    document.getElementById('quantity').value = selectedCodes.length;
+
+    updateCodesDisplay();
+
+    const modal = bootstrap.Modal.getInstance(document.getElementById('codeSelectorModal'));
+    modal.hide();
+}
+
+// 防重复提交标志
+var stockOutSubmitting = false;
+
+// 表单提交处理（验证 + 确认 + 防重复提交）
+(function() {
+    'use strict';
+    var form = document.getElementById('stockOutForm');
+
+    form.addEventListener('submit', function(event) {
+        // 防重复提交
+        if (stockOutSubmitting) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+        stockOutSubmitting = true;
+
+        var quantityInput = document.getElementById('quantity');
+        var product = document.getElementById('product_id');
+        var warehouse = document.getElementById('warehouse_id');
+
+        // 1. HTML5表单验证
+        if (!form.checkValidity()) {
+            stockOutSubmitting = false;
+            event.preventDefault();
+            event.stopPropagation();
+            form.classList.add('was-validated');
+            return;
+        }
+
+        var quantity = parseInt(quantityInput.value) || 0;
+        var codesCount = selectedCodes.length;
+
+        // 2. 验证必须有码段
+        if (codesCount === 0) {
+            stockOutSubmitting = false;
+            event.preventDefault();
+            event.stopPropagation();
+            alert('请选择出库码段！\n\n请点击"选择码段"按钮或输入防窜货码。');
+            return;
+        }
+
+        // 3. 验证数量与码段一致
+        if (quantity !== codesCount) {
+            stockOutSubmitting = false;
+            event.preventDefault();
+            event.stopPropagation();
+            alert('出库数量(' + quantity + ')与防窜货码数量(' + codesCount + ')不一致！\n请核对后再出库。');
+            return;
+        }
+
+        // 不使用confirm弹窗，直接提交（避免阻塞导致表单无法提交）
+        form.classList.add('was-validated');
+    }, false);
+})();
+
+document.getElementById('quantity').addEventListener('input', function() {
+    validateOutboundQuantity();
+    // 当手动修改出库数量时，检查与防窜货码数量是否匹配
+    if (selectedCodes.length > 0) {
+        var quantity = parseInt(this.value) || 0;
+        if (quantity !== selectedCodes.length) {
+            this.classList.add('border-warning');
+        } else {
+            this.classList.remove('border-warning');
+            this.classList.remove('is-invalid');
+        }
+    }
+});
+
+// 根据仓库加载商品列表
+function loadProductsByWarehouse() {
+    const warehouseId = document.getElementById('warehouse_id').value;
+    const productSelect = document.getElementById('product_id');
+    
+    // 清空商品选择
+    productSelect.innerHTML = '<option value="">加载中...</option>';
+    clearParsedCodes();
+    
+    if (!warehouseId) {
+        productSelect.innerHTML = '<option value="">请先选择仓库</option>';
+        return;
+    }
+    
+    fetch(`/inventory/api/products-by-warehouse?warehouse_id=${warehouseId}`)
+        .then(response => response.json())
+        .then(data => {
+            productSelect.innerHTML = '';
+            
+            if (data.success && data.products.length > 0) {
+                productSelect.innerHTML = '<option value="">请选择商品</option>';
+                data.products.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.id;
+                    option.textContent = `${product.name} (${product.sku}) - ${product.quantity}盒`;
+                    option.dataset.barcode = product.barcode || '';
+                    option.dataset.quantity = product.quantity;
+                    productSelect.appendChild(option);
+                });
+            } else {
+                productSelect.innerHTML = '<option value="">该仓库暂无库存商品</option>';
+            }
+        })
+        .catch(error => {
+            console.error('加载商品失败:', error);
+            productSelect.innerHTML = '<option value="">加载失败，请重试</option>';
+        });
+}
+
+// 验证出库数量
+function validateOutboundQuantity() {
+    const productSelect = document.getElementById('product_id');
+    const quantityInput = document.getElementById('quantity');
+    
+    if (productSelect.value && quantityInput.value) {
+        const selectedOption = productSelect.options[productSelect.selectedIndex];
+        const availableQuantity = parseInt(selectedOption.dataset.quantity) || 0;
+        const requestedQuantity = parseInt(quantityInput.value) || 0;
+        
+        if (requestedQuantity > availableQuantity) {
+            quantityInput.classList.add('is-invalid');
+            quantityInput.classList.remove('is-valid');
+            alert(`出库数量(${requestedQuantity})不能超过该商品库存(${availableQuantity})！`);
+            return false;
+        } else {
+            quantityInput.classList.remove('is-invalid');
+            quantityInput.classList.add('is-valid');
+            return true;
+        }
+    }
+    return true;
+}
+
+// 监听商品和数量变化
+document.getElementById('product_id').addEventListener('change', function() {
+    document.getElementById('quantity').value = '';
+    document.getElementById('quantity').classList.remove('is-valid', 'is-invalid');
+    clearParsedCodes();
+});
+
+document.getElementById('quantity').addEventListener('input', function() {
+    validateOutboundQuantity();
+    // 当手动修改出库数量时，检查与防窜货码数量是否匹配
+    if (selectedCodes.length > 0) {
+        var quantity = parseInt(this.value) || 0;
+        if (quantity !== selectedCodes.length) {
+            this.classList.add('border-warning');
+        } else {
+            this.classList.remove('border-warning');
+            this.classList.remove('is-invalid');
+        }
+    }
+});
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.code-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    gap: 5px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 5px;
+}
+
+.code-item {
+    padding: 8px 4px;
+    text-align: center;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.code-item:hover {
+    background: #e9ecef;
+}
+
+.code-item.selected {
+    background: #198754;
+    color: white;
+    border-color: #198754;
+}
+
+/* 批次选择按钮 */
+.batch-select-btn {
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.batch-select-btn:hover {
+    transform: scale(1.05);
+}
+
+.accordion-button .batch-select-btn {
+    box-shadow: none;
+}
+</style>
+{% endblock %}

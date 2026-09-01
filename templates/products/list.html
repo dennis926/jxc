@@ -1,0 +1,636 @@
+{% extends "base.html" %}
+
+{% block title %}商品列表 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <div>
+        <a href="{{ url_for('products.export') }}" class="btn btn-success me-2">
+            <i class="fas fa-file-excel me-1"></i>导出Excel
+        </a>
+        <a href="{{ url_for('products.create') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>新增商品
+        </a>
+    </div>
+</div>
+
+<!-- 搜索和筛选 -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row">
+            <div class="col-4 col-md-6 mb-3">
+                <input type="text" name="search" class="form-control" placeholder="搜索商品名称或编码..."
+                       value="{{ search }}">
+            </div>
+            <div class="col-3 col-md-6 mb-3">
+                <select name="category" class="form-select">
+                    <option value="">全部分类</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat }}" {% if category == cat %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-3 col-md-6 mb-3">
+                <select name="status" class="form-select">
+                    <option value="">全部状态</option>
+                    <option value="active" {% if status == 'active' %}selected{% endif %}>已启用</option>
+                    <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>已停用</option>
+                </select>
+            </div>
+            <div class="col-2 col-md-6 mb-3">
+                <button type="submit" class="btn btn-secondary w-100">
+                    <i class="fas fa-search me-1"></i>搜索
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 商品列表 -->
+<div class="card">
+    <div class="card-body">
+        <!-- 批量操作栏 -->
+        <form id="batchDeleteForm" method="post" action="{{ url_for('products.batch_delete') }}">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-muted" id="selectedCount">已选择 0 项</span>
+                <div>
+                    <button type="button" id="batchDisableBtn" class="btn btn-secondary me-2" disabled onclick="confirmBatchToggleStatus(false)">
+                        <i class="fas fa-ban me-1"></i>批量停用
+                    </button>
+                    <button type="button" id="batchEnableBtn" class="btn btn-success me-2" disabled onclick="confirmBatchToggleStatus(true)">
+                        <i class="fas fa-check-circle me-1"></i>批量启用
+                    </button>
+                    <button type="button" id="batchDeleteBtn" class="btn btn-danger" disabled onclick="confirmBatchDelete()">
+                        <i class="fas fa-trash me-1"></i>批量删除
+                    </button>
+                </div>
+            </div>
+
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width: 40px; text-align: center;">
+                            <input type="checkbox" class="form-check-input" id="selectAll">
+                        </th>
+                        <th class="sortable" data-sort="sku">
+                            编码
+                            <i class="fas fa-sort{% if sort == 'sku' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-sort="name">
+                            名称
+                            <i class="fas fa-sort{% if sort == 'name' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-sort="barcode">
+                            条形码
+                            <i class="fas fa-sort{% if sort == 'barcode' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-sort="category">
+                            分类
+                            <i class="fas fa-sort{% if sort == 'category' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th>规格</th>
+                        <th class="sortable" data-sort="cost_price">
+                            成本价
+                            <i class="fas fa-sort{% if sort == 'cost_price' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-sort="selling_price">
+                            售价
+                            <i class="fas fa-sort{% if sort == 'selling_price' %}-{{ 'down' if order == 'desc' else 'up' }}{% endif %} sort-icon"></i>
+                        </th>
+                        <th>关联数据</th>
+                        <th>状态</th>
+                        <th style="text-align: right;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    {% set inv_count = product.inventory_records.count() %}
+                    {% set tx_count = product.stock_transactions.count() %}
+                    {% set po_count = product.purchase_order_items.count() %}
+                    <tr class="{% if not product.is_active %}text-muted{% endif %}" style="{% if not product.is_active %}background: var(--bg-secondary);{% endif %}">
+                        <td style="text-align: center;">
+                            <input type="checkbox" class="form-check-input item-checkbox" name="ids[]" value="{{ product.id }}">
+                        </td>
+                        <td>{{ product.sku }}</td>
+                        <td>
+                            {{ product.name }}
+                        </td>
+                        <td>
+                            {% if product.barcode %}
+                            <small style="font-family: var(--font-mono);">{{ product.barcode }}</small>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ product.category or '-' }}</td>
+                        <td>{{ product.specification or '-' }}</td>
+                        <td>{{ product.cost_price }}</td>
+                        <td>{{ product.selling_price }}</td>
+                        <td>
+                            {% if inv_count > 0 or tx_count > 0 or po_count > 0 %}
+                            <button type="button" class="btn btn-sm btn-secondary" 
+                                    onclick="showRelations({{ product.id }}, '{{ product.name }}', {{ inv_count }}, {{ tx_count }}, {{ po_count }})">
+                                <i class="fas fa-link me-1"></i>
+                                {% if inv_count > 0 %}库存{{ inv_count }}{% endif %}
+                                {% if tx_count > 0 %}出入库{{ tx_count }}{% endif %}
+                                {% if po_count > 0 %}采购{{ po_count }}{% endif %}
+                            </button>
+                            {% else %}
+                            <span class="text-muted">无</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if product.is_active %}
+                            <span class="badge badge-success">启用</span>
+                            {% else %}
+                            <span class="badge badge-secondary">停用</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="table-actions">
+                                <a href="{{ url_for('products.edit', id=product.id) }}" class="btn btn-sm btn-primary" title="编辑">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                {% if product.is_active %}
+                                <button type="button" class="btn btn-sm btn-secondary" 
+                                        onclick="toggleStatus({{ product.id }}, '{{ product.name }}', false)" title="停用">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                                {% else %}
+                                <button type="button" class="btn btn-sm btn-success" 
+                                        onclick="toggleStatus({{ product.id }}, '{{ product.name }}', true)" title="启用">
+                                    <i class="fas fa-check-circle"></i>
+                                </button>
+                                {% endif %}
+                                <button type="button" class="btn btn-sm btn-danger" 
+                                        onclick="confirmDelete({{ product.id }}, '{{ product.name }}', {{ inv_count }}, {{ tx_count }}, {{ po_count }})" title="删除">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="12" class="text-center text-muted py-4">暂无商品数据</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        </form>
+
+        <!-- 分页 -->
+        {% if pagination.pages > 1 %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if pagination.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('products.list', page=pagination.prev_num, search=search, category=category, status=status, sort=sort, order=order) }}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for p in pagination.iter_pages() %}
+                    {% if p %}
+                        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('products.list', page=p, search=search, category=category, status=status, sort=sort, order=order) }}">{{ p }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagination.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('products.list', page=pagination.next_num, search=search, category=category, status=status, sort=sort, order=order) }}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 关联数据模态框 -->
+<div class="modal fade" id="relationsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">商品关联数据</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" id="relationsProductName"></p>
+                <div id="relationsContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-warning" id="clearInventoryBtn" style="display:none;" onclick="clearInventory()">
+                    <i class="fas fa-eraser me-1"></i>清零库存
+                </button>
+                <button type="button" class="btn btn-danger" id="forceDeleteBtn" style="display:none;" onclick="forceDelete()">
+                    <i class="fas fa-trash me-1"></i>删除商品及所有关联数据
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 删除表单（隐藏） -->
+<form id="deleteForm" method="post" style="display:none;"></form>
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.sortable:hover {
+    background-color: var(--bg-tertiary);
+}
+.sort-icon {
+    margin-left: 5px;
+    color: var(--text-muted);
+    font-size: 0.8em;
+}
+.sortable .fa-sort-up,
+.sortable .fa-sort-down {
+    color: var(--primary);
+}
+
+/* 分页样式 */
+.pagination {
+    display: flex;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    gap: var(--space-1);
+}
+.page-item {
+    display: inline-flex;
+}
+.page-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 var(--space-3);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: white;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    transition: all 0.2s;
+}
+.page-link:hover {
+    background: var(--bg-secondary);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+.page-item.active .page-link {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+.page-item.disabled .page-link {
+    color: var(--text-muted);
+    cursor: not-allowed;
+    background: var(--bg-secondary);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 当前排序状态
+var currentSort = '{{ sort }}';
+var currentOrder = '{{ order }}';
+
+// 排序点击处理
+function handleSort(sortField) {
+    var newOrder = 'asc';
+    if (currentSort === sortField) {
+        newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+    }
+    
+    // 构建新的URL
+    var url = new URL(window.location.href);
+    url.searchParams.set('sort', sortField);
+    url.searchParams.set('order', newOrder);
+    url.searchParams.delete('page'); // 重置到第一页
+    
+    window.location.href = url.toString();
+}
+
+// 绑定排序点击事件
+document.querySelectorAll('.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+        var sortField = this.getAttribute('data-sort');
+        if (sortField) {
+            handleSort(sortField);
+        }
+    });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    var selectAll = document.getElementById('selectAll');
+    var checkboxes = document.querySelectorAll('.item-checkbox');
+    var batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    var batchDisableBtn = document.getElementById('batchDisableBtn');
+    var batchEnableBtn = document.getElementById('batchEnableBtn');
+    var selectedCount = document.getElementById('selectedCount');
+
+    // 更新选中状态
+    function updateSelection() {
+        var checked = document.querySelectorAll('.item-checkbox:checked');
+        var count = checked.length;
+        selectedCount.textContent = '已选择 ' + count + ' 项';
+        batchDeleteBtn.disabled = (count === 0);
+        batchDisableBtn.disabled = (count === 0);
+        batchEnableBtn.disabled = (count === 0);
+
+        // 更新全选checkbox状态
+        if (count === 0) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+        } else if (count === checkboxes.length) {
+            selectAll.checked = true;
+            selectAll.indeterminate = false;
+        } else {
+            selectAll.checked = false;
+            selectAll.indeterminate = true;
+        }
+    }
+
+    // 全选/取消全选
+    selectAll.addEventListener('change', function() {
+        var isChecked = this.checked;
+        checkboxes.forEach(function(cb) {
+            cb.checked = isChecked;
+        });
+        updateSelection();
+    });
+
+    // 单个checkbox变化
+    checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', updateSelection);
+    });
+});
+
+var currentProductId = null;
+var relationsModal = new bootstrap.Modal(document.getElementById('relationsModal'));
+
+// 显示关联数据
+function showRelations(productId, productName, invCount, txCount, poCount) {
+    currentProductId = productId;
+    document.getElementById('relationsProductName').textContent = '商品：' + productName;
+    
+    var content = '';
+    var hasInventory = invCount > 0;
+    
+    if (invCount === 0 && txCount === 0 && poCount === 0) {
+        content = '<div class="alert alert-success">该商品无关联数据，可以直接删除。</div>';
+        document.getElementById('clearInventoryBtn').style.display = 'none';
+    } else {
+        content = '<div style="display: flex; flex-direction: column; gap: var(--space-2);">';
+        
+        if (invCount > 0) {
+            content += '<div style="display: flex; justify-content: space-between; align-items: center; padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-md);">';
+            content += '<span><i class="fas fa-warehouse me-2" style="color: var(--primary);"></i>库存记录</span>';
+            content += '<span class="badge badge-primary">' + invCount + ' 条</span>';
+            content += '</div>';
+        }
+        
+        if (txCount > 0) {
+            content += '<div style="display: flex; justify-content: space-between; align-items: center; padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-md);">';
+            content += '<span><i class="fas fa-exchange-alt me-2" style="color: var(--info);"></i>出入库记录</span>';
+            content += '<span class="badge badge-info">' + txCount + ' 条</span>';
+            content += '</div>';
+        }
+        
+        if (poCount > 0) {
+            content += '<div style="display: flex; justify-content: space-between; align-items: center; padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-md);">';
+            content += '<span><i class="fas fa-shopping-cart me-2" style="color: var(--warning);"></i>采购单明细</span>';
+            content += '<span class="badge badge-warning">' + poCount + ' 条</span>';
+            content += '</div>';
+        }
+        
+        content += '</div>';
+        
+        content += '<div class="alert alert-info mt-3">';
+        content += '<h6 style="font-weight: 600; margin-bottom: var(--space-2);"><i class="fas fa-info-circle me-1"></i>删除建议：</h6>';
+        content += '<ul style="margin-bottom: 0; padding-left: var(--space-5);">';
+        if (invCount > 0) {
+            content += '<li>库存记录：可使用"一键清零库存"功能清理</li>';
+        }
+        if (txCount > 0) {
+            content += '<li>出入库记录：为历史数据，建议保留</li>';
+        }
+        if (poCount > 0) {
+            content += '<li>采购单明细：为历史数据，建议保留</li>';
+        }
+        content += '</ul>';
+        content += '</div>';
+    }
+    
+    document.getElementById('relationsContent').innerHTML = content;
+    
+    // 显示/隐藏操作按钮
+    document.getElementById('clearInventoryBtn').style.display = hasInventory ? 'inline-flex' : 'none';
+    document.getElementById('forceDeleteBtn').style.display = (invCount > 0 || txCount > 0 || poCount > 0) ? 'inline-flex' : 'none';
+    
+    relationsModal.show();
+}
+
+// 确认删除
+function confirmDelete(productId, productName, invCount, txCount, poCount) {
+    var msg = '确定要删除商品 "' + productName + '" 吗？\n\n';
+    var canDelete = true;
+    
+    if (invCount > 0 || txCount > 0 || poCount > 0) {
+        msg += '⚠️ 该商品存在以下关联数据：\n';
+        if (invCount > 0) {
+            msg += '  • 库存记录：' + invCount + ' 条（必须先清理）\n';
+            canDelete = false;
+        }
+        if (txCount > 0) {
+            msg += '  • 出入库记录：' + txCount + ' 条（将保留为历史数据）\n';
+        }
+        if (poCount > 0) {
+            msg += '  • 采购单明细：' + poCount + ' 条（必须先清理）\n';
+            canDelete = false;
+        }
+        
+        if (!canDelete) {
+            msg += '\n请先清理库存和采购单明细后再删除。';
+            msg += '\n建议点击"关联数据"按钮查看详情并处理。';
+            alert(msg);
+            return false;
+        }
+        
+        msg += '\n出入库记录将保留为历史数据，是否继续删除？';
+    } else {
+        msg += '删除后将无法恢复，是否继续？';
+    }
+    
+    if (confirm(msg)) {
+        var form = document.getElementById('deleteForm');
+        form.action = '/products/delete/' + productId;
+        form.submit();
+    }
+}
+
+// 一键清零库存
+function clearInventory() {
+    if (!currentProductId) return;
+    
+    if (!confirm('确定要清零该商品在所有仓库的库存吗？\n\n此操作将通过盘点调整将库存数量设为0，并生成盘点记录。')) {
+        return;
+    }
+    
+    fetch('/products/' + currentProductId + '/clear-inventory', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+            relationsModal.hide();
+            location.reload();
+        } else {
+            alert('❌ ' + (data.error || '操作失败'));
+        }
+    })
+    .catch(error => {
+        alert('❌ 请求失败：' + error);
+    });
+}
+
+// 强制删除商品及所有关联数据
+function forceDelete() {
+    if (!currentProductId) return;
+    
+    if (!confirm('⚠️ 危险操作！\n\n将同时删除该商品及其所有关联数据：\n  • 库存记录\n  • 出入库记录\n  • 采购单明细\n\n此操作不可恢复，确定继续吗？')) {
+        return;
+    }
+    
+    fetch('/products/' + currentProductId + '/force-delete', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+            relationsModal.hide();
+            location.reload();
+        } else {
+            alert('❌ ' + (data.error || '操作失败'));
+        }
+    })
+    .catch(error => {
+        alert('❌ 请求失败：' + error);
+    });
+}
+
+// 批量删除确认
+function confirmBatchDelete() {
+    var checked = document.querySelectorAll('.item-checkbox:checked');
+    if (checked.length === 0) {
+        return;
+    }
+    if (confirm('确定要删除选中的 ' + checked.length + ' 个商品吗？\n\n注意：存在关联数据（库存、出入库记录、采购单明细）的商品将无法删除。')) {
+        document.getElementById('batchDeleteForm').submit();
+    }
+}
+
+// 切换商品状态
+function toggleStatus(productId, productName, enable) {
+    var action = enable ? '启用' : '停用';
+    var msg = '确定要' + action + '商品 "' + productName + '" 吗？';
+    
+    if (!enable) {
+        msg += '\n\n⚠️ 停用后该商品将无法进行出入库操作。';
+    }
+    
+    if (!confirm(msg)) {
+        return;
+    }
+    
+    fetch('/products/' + productId + '/toggle-status', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ is_active: enable })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+            location.reload();
+        } else {
+            alert('❌ ' + (data.error || '操作失败'));
+        }
+    })
+    .catch(error => {
+        alert('❌ 请求失败：' + error);
+    });
+}
+
+// 批量切换状态
+function confirmBatchToggleStatus(enable) {
+    var checked = document.querySelectorAll('.item-checkbox:checked');
+    if (checked.length === 0) {
+        return;
+    }
+    
+    var action = enable ? '启用' : '停用';
+    var msg = '确定要' + action + '选中的 ' + checked.length + ' 个商品吗？';
+    
+    if (!enable) {
+        msg += '\n\n⚠️ 停用后这些商品将无法进行出入库操作。';
+    }
+    
+    if (!confirm(msg)) {
+        return;
+    }
+    
+    var ids = Array.from(checked).map(cb => cb.value);
+    
+    fetch('/products/batch-toggle-status', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ ids: ids, is_active: enable })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+            location.reload();
+        } else {
+            alert('❌ ' + (data.error || '操作失败'));
+        }
+    })
+    .catch(error => {
+        alert('❌ 请求失败：' + error);
+    });
+}
+</script>
+{% endblock %}

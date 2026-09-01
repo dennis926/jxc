@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}编辑批次 - 批次管理 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('batches.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form id="batchForm" method="POST">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">批次号</label>
+                    <input type="text" class="form-control" value="{{ batch.batch_no }}" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">商品</label>
+                    <input type="text" class="form-control" value="{{ batch.product.name }}" readonly>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">仓库</label>
+                    <input type="text" class="form-control" value="{{ batch.warehouse.name }}" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">状态</label>
+                    <input type="text" class="form-control" value="{% if batch.status == 'active' %}可用{% elif batch.status == 'depleted' %}已用完{% else %}已作废{% endif %}" readonly>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">码段</label>
+                    <input type="text" class="form-control" value="{{ batch.code_start }}-{{ batch.code_end }}" readonly>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">入库数量</label>
+                    <input type="text" class="form-control" value="{{ batch.total_quantity }}" readonly>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">剩余数量</label>
+                    <input type="text" class="form-control" value="{{ batch.remaining_quantity }}" readonly>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">生产日期</label>
+                    <input type="date" name="production_date" class="form-control" value="{{ batch.production_date.strftime('%Y-%m-%d') if batch.production_date else '' }}"
+                           onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">有效期至</label>
+                    <input type="date" name="expire_date" class="form-control" value="{{ batch.expire_date.strftime('%Y-%m-%d') if batch.expire_date else '' }}"
+                           onkeydown="return false;" onpaste="return false;" autocomplete="off" placeholder="点击选择">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">备注</label>
+                <textarea name="remark" class="form-control" rows="3">{{ batch.remark }}</textarea>
+            </div>
+
+            <div class="text-end">
+                <a href="{{ url_for('batches.list') }}" class="btn btn-secondary">取消</a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>保存
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$('#batchForm').submit(function(e) {
+    e.preventDefault();
+    
+    $.ajax({
+        url: '{{ url_for("batches.edit", id=batch.id) }}',
+        method: 'POST',
+        data: $(this).serialize(),
+        success: function(res) {
+            if (res.success) {
+                alert('保存成功');
+                location.href = '{{ url_for("batches.list") }}';
+            } else {
+                alert('保存失败：' + res.message);
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

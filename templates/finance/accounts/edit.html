@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}编辑账户 - 财务模块 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('finance.accounts') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form id="accountForm" method="POST">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">账户名称 <span class="text-danger">*</span></label>
+                    <input type="text" name="name" class="form-control" value="{{ account.name }}" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">账户编码</label>
+                    <input type="text" name="code" class="form-control" value="{{ account.code or '' }}">
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">账户类型 <span class="text-danger">*</span></label>
+                    <select name="type" class="form-select" required>
+                        <option value="bank" {% if account.type == 'bank' %}selected{% endif %}>银行账户</option>
+                        <option value="cash" {% if account.type == 'cash' %}selected{% endif %}>现金</option>
+                        <option value="card" {% if account.type == 'card' %}selected{% endif %}>信用卡</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">账号</label>
+                    <input type="text" name="account_no" class="form-control" value="{{ account.account_no or '' }}">
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">当前余额</label>
+                    <input type="text" class="form-control" value="¥{{ account.current_balance }}" readonly>
+                    <div class="form-text">余额由收支记录自动计算，不可直接修改</div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">备注</label>
+                <textarea name="remark" class="form-control" rows="3">{{ account.remark or '' }}</textarea>
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>保存
+                </button>
+                <a href="{{ url_for('finance.accounts') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#accountForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        $.ajax({
+            url: '{{ url_for("finance.edit_account", id=account.id) }}',
+            method: 'POST',
+            data: $(this).serialize(),
+            success: function(res) {
+                if (res.success) {
+                    alert('更新成功');
+                    window.location.href = '{{ url_for("finance.accounts") }}';
+                } else {
+                    alert('更新失败：' + res.message);
+                }
+            },
+            error: function() {
+                alert('更新失败');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

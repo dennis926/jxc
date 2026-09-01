@@ -1,0 +1,518 @@
+{% extends "base.html" %}
+
+{% block title %}采购入库确认 - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('purchase_orders.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold">采购单信息</h6>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <strong>采购单号:</strong> {{ order.po_no }}
+            </div>
+            <div class="col-md-3">
+                <strong>供应商:</strong> {{ order.supplier.name if order.supplier else '-' }}
+            </div>
+            <div class="col-md-3">
+                <strong>入库仓库:</strong> {{ order.warehouse.name if order.warehouse else '-' }}
+            </div>
+            <div class="col-md-3">
+                <strong>总金额:</strong> {{ order.total_amount }}
+            </div>
+        </div>
+        {% if order.remark %}
+        <div class="mt-2">
+            <strong>备注:</strong> {{ order.remark }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold">入库明细</h6>
+    </div>
+    <div class="card-body">
+        <form method="post" class="needs-validation" novalidate>
+            <!-- 提示信息 -->
+            <div class="alert alert-info mb-3">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>提示：</strong>每个商品的生产日期、有效日期请在下方表格中单独填写
+            </div>
+            <hr>
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>商品</th>
+                            <th>采购数量</th>
+                            <th>已入库数量</th>
+                            <th>待入库数量</th>
+                            <th>本次入库数量</th>
+                            <th>单位成本</th>
+                            <th>生产日期</th>
+                            <th>有效日期</th>
+                            <th style="min-width: 200px;">防窜货码段</th>
+                            <th style="width: 80px;">状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr data-item-id="{{ item.id }}" data-product-name="{{ item.product.name if item.product else '-' }}" data-product-sku="{{ item.product.sku if item.product else '' }}">
+                            <td>
+                                {{ item.product.name if item.product else '-' }}
+                                <br>
+                                <small class="text-muted">SKU: {{ item.product.sku if item.product else '-' }}</small>
+                            </td>
+                            <td>{{ item.quantity }}</td>
+                            <td>{{ item.received_quantity }}</td>
+                            <td>{{ item.quantity - item.received_quantity }}</td>
+                            <td>
+                                <input type="number" name="received_quantity[]" class="form-control received-qty"
+                                       min="0" max="{{ item.quantity - item.received_quantity }}"
+                                       value="{{ item.quantity - item.received_quantity }}"
+                                       onchange="checkRowComplete({{ loop.index0 }})">
+                                <input type="hidden" name="item_id[]" value="{{ item.id }}">
+                            </td>
+                            <td>{{ item.unit_cost }}</td>
+                            <td>
+                                <input type="date" name="production_date[]" class="form-control form-control-sm production-date"
+                                       id="production_date_{{ loop.index0 }}"
+                                       onchange="checkRowComplete({{ loop.index0 }}); calculateValidityForRow({{ loop.index0 }});"
+                                       onkeydown="return false;"
+                                       onpaste="return false;"
+                                       autocomplete="off"
+                                       placeholder="点击选择">
+                            </td>
+                            <td>
+                                <input type="date" name="expire_date[]" class="form-control form-control-sm expire-date"
+                                       id="expire_date_{{ loop.index0 }}"
+                                       onchange="checkRowComplete({{ loop.index0 }}); calculateValidityForRow({{ loop.index0 }});"
+                                       onkeydown="return false;"
+                                       onpaste="return false;"
+                                       autocomplete="off"
+                                       placeholder="点击选择">
+                                <small class="text-muted" id="validity_info_{{ loop.index0 }}"></small>
+                            </td>
+                            <td>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control batch-code-input" 
+                                           id="batch_code_{{ loop.index0 }}"
+                                           placeholder="如：50000-50100"
+                                           onkeydown="if(event.key==='Enter'){event.preventDefault(); parseCodeForRow({{ loop.index0 }});}"
+                                           onblur="validateCodeForRow({{ loop.index0 }})">
+                                    <button type="button" class="btn btn-outline-primary" onclick="parseCodeForRow({{ loop.index0 }})">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </div>
+                                <input type="hidden" name="batch_code[]" id="batch_code_hidden_{{ loop.index0 }}">
+                                <small class="text-muted" id="batch_code_info_{{ loop.index0 }}"></small>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary" id="status_{{ loop.index0 }}">待输入</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 汇总信息 -->
+            <div class="alert alert-info mt-3">
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>商品种类：</strong><span id="total_items">{{ items|length }}</span> 种
+                    </div>
+                    <div class="col-md-4">
+                        <strong>已填写码段：</strong><span id="filled_count">0</span> 种
+                    </div>
+                    <div class="col-md-4">
+                        <strong>待填写：</strong><span id="pending_count">{{ items|length }}</span> 种
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <button type="submit" class="btn btn-success" id="submitBtn" disabled>
+                    <i class="fas fa-check me-1"></i>确认入库
+                </button>
+                <a href="{{ url_for('purchase_orders.list') }}" class="btn btn-outline-secondary">取消</a>
+                <button type="button" class="btn btn-outline-warning float-end" onclick="checkAllRows()">
+                    <i class="fas fa-search me-1"></i>检查完整性
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 提示模态框 -->
+<div class="modal fade" id="alertModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="alertModalTitle">提示</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="alertModalBody">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 商品数量
+var totalItems = {{ items|length }};
+var parsedCodes = new Array(totalItems).fill(null);
+
+// 解析单个商品的码段
+function parseCodeForRow(rowIndex) {
+    var input = document.getElementById('batch_code_' + rowIndex);
+    var hiddenInput = document.getElementById('batch_code_hidden_' + rowIndex);
+    var infoSpan = document.getElementById('batch_code_info_' + rowIndex);
+    var statusBadge = document.getElementById('status_' + rowIndex);
+    var qtyInput = document.querySelectorAll('.received-qty')[rowIndex];
+    var expectedQty = parseInt(qtyInput.value) || 0;
+    
+    var codeInput = input.value.trim();
+    
+    if (!codeInput) {
+        showAlert('提示', '请输入码段');
+        return;
+    }
+    
+    // 解析码段
+    var result = parseBatchCode(codeInput);
+    
+    if (result.valid) {
+        parsedCodes[rowIndex] = result;
+        hiddenInput.value = result.raw;
+        
+        // 验证数量
+        if (result.count === expectedQty) {
+            infoSpan.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> 码段：' + result.display + '，数量：' + result.count + ' 个 ✓</span>';
+            statusBadge.className = 'badge bg-success';
+            statusBadge.textContent = '已就绪';
+        } else if (result.count < expectedQty) {
+            infoSpan.innerHTML = '<span class="text-warning"><i class="fas fa-exclamation-triangle"></i> 码段数量(' + result.count + ')少于入库数量(' + expectedQty + ')</span>';
+            statusBadge.className = 'badge bg-warning text-dark';
+            statusBadge.textContent = '数量不足';
+        } else {
+            infoSpan.innerHTML = '<span class="text-info"><i class="fas fa-info-circle"></i> 码段数量(' + result.count + ')多于入库数量(' + expectedQty + ')，多余码将保留</span>';
+            statusBadge.className = 'badge bg-info';
+            statusBadge.textContent = '数量充足';
+        }
+    } else {
+        infoSpan.innerHTML = '<span class="text-danger"><i class="fas fa-times-circle"></i> ' + result.error + '</span>';
+        statusBadge.className = 'badge bg-danger';
+        statusBadge.textContent = '格式错误';
+        parsedCodes[rowIndex] = null;
+        hiddenInput.value = '';
+    }
+    
+    updateSummary();
+}
+
+// 验证码段格式（失焦时）
+function validateCodeForRow(rowIndex) {
+    var input = document.getElementById('batch_code_' + rowIndex);
+    var codeInput = input.value.trim();
+    
+    if (codeInput && !parsedCodes[rowIndex]) {
+        parseCodeForRow(rowIndex);
+    }
+}
+
+// 解析码段
+function parseBatchCode(input) {
+    input = input.trim();
+    
+    if (!input) {
+        return { valid: false, error: '请输入码段' };
+    }
+    
+    // 格式1: LYJYQEM100004000-LYJYQEM100005000 或 100001-100500
+    var rangePattern = /^([A-Za-z]*?)(\d+)-([A-Za-z]*?)(\d+)$/;
+    var match = input.match(rangePattern);
+    
+    if (match) {
+        var prefix1 = match[1];
+        var prefix2 = match[3];
+        var start = match[2];
+        var end = match[4];
+        
+        if (prefix1 !== prefix2) {
+            return { valid: false, error: '前缀不一致：' + prefix1 + ' vs ' + prefix2 };
+        }
+        
+        var startNum = parseInt(start);
+        var endNum = parseInt(end);
+        
+        if (endNum < startNum) {
+            return { valid: false, error: '结束码必须大于等于起始码' };
+        }
+        
+        var count = endNum - startNum + 1;
+        
+        if (count > 10000) {
+            return { valid: false, error: '码段数量不能超过10000' };
+        }
+        
+        var prefix = prefix1;
+        var displayStart = prefix + start;
+        var displayEnd = prefix + end;
+        
+        return {
+            valid: true,
+            count: count,
+            start: start,
+            end: end,
+            prefix: prefix,
+            display: displayStart + '-' + displayEnd,
+            raw: displayStart + '-' + displayEnd
+        };
+    }
+    
+    // 格式2: 逗号分隔
+    if (input.includes(',')) {
+        var codes = input.split(',').map(function(c) { return c.trim(); }).filter(function(c) { return c; });
+        
+        if (codes.length === 0) {
+            return { valid: false, error: '请输入有效的码段' };
+        }
+        
+        // 检查是否都是数字
+        var allNumeric = codes.every(function(c) { return /^\d+$/.test(c); });
+        
+        if (allNumeric) {
+            if (codes.length > 10000) {
+                return { valid: false, error: '码段数量不能超过10000' };
+            }
+            return {
+                valid: true,
+                count: codes.length,
+                codes: codes,
+                display: codes[0] + '...' + codes[codes.length - 1] + ' (' + codes.length + '个)',
+                raw: codes.join(',')
+            };
+        } else {
+            return { valid: false, error: '逗号分隔格式请使用纯数字' };
+        }
+    }
+    
+    // 格式3: 单个码
+    if (/^\d+$/.test(input)) {
+        return {
+            valid: true,
+            count: 1,
+            codes: [input],
+            display: input + ' (1个)',
+            raw: input
+        };
+    }
+    
+    return { valid: false, error: '不支持的格式，支持：范围(如100001-100500)、逗号分隔(如100001,100002)或单个码(如100001)' };
+}
+
+// 检查行是否完成
+function checkRowComplete(rowIndex) {
+    var qtyInput = document.querySelectorAll('.received-qty')[rowIndex];
+    var expectedQty = parseInt(qtyInput.value) || 0;
+    var codeInput = document.getElementById('batch_code_' + rowIndex);
+    
+    if (expectedQty > 0 && !codeInput.value.trim()) {
+        var statusBadge = document.getElementById('status_' + rowIndex);
+        statusBadge.className = 'badge bg-warning text-dark';
+        statusBadge.textContent = '待输入';
+    }
+}
+
+// 更新汇总信息
+function updateSummary() {
+    var filledCount = 0;
+    var hasError = false;
+    
+    for (var i = 0; i < totalItems; i++) {
+        var qtyInput = document.querySelectorAll('.received-qty')[i];
+        var expectedQty = parseInt(qtyInput.value) || 0;
+        
+        if (expectedQty > 0) {
+            if (parsedCodes[i] && parsedCodes[i].valid) {
+                filledCount++;
+            }
+            if (parsedCodes[i] && !parsedCodes[i].valid) {
+                hasError = true;
+            }
+        } else {
+            // 数量为0的也算完成
+            filledCount++;
+        }
+    }
+    
+    document.getElementById('filled_count').textContent = filledCount;
+    document.getElementById('pending_count').textContent = totalItems - filledCount;
+    
+    // 启用/禁用提交按钮
+    var submitBtn = document.getElementById('submitBtn');
+    var allComplete = filledCount === totalItems && !hasError;
+    submitBtn.disabled = !allComplete;
+    
+    if (hasError) {
+        submitBtn.title = '存在格式错误的码段，请修正';
+    } else if (filledCount < totalItems) {
+        submitBtn.title = '还有商品未填写码段';
+    } else {
+        submitBtn.title = '';
+    }
+}
+
+// 检查所有行
+function checkAllRows() {
+    var message = '';
+    var incompleteCount = 0;
+    
+    for (var i = 0; i < totalItems; i++) {
+        var qtyInput = document.querySelectorAll('.received-qty')[i];
+        var expectedQty = parseInt(qtyInput.value) || 0;
+        var statusBadge = document.getElementById('status_' + rowIndex);
+        var productName = document.querySelectorAll('tr[data-item-id]')[i].dataset.productName;
+        
+        if (expectedQty > 0 && (!parsedCodes[i] || !parsedCodes[i].valid)) {
+            incompleteCount++;
+            message += '\n• ' + productName + '：码段未填写或格式错误';
+        }
+    }
+    
+    if (incompleteCount === 0) {
+        message = '所有商品的码段已填写完整，可以提交入库！';
+        showAlert('检查完成 ✓', '<div class="text-center"><i class="fas fa-check-circle text-success fa-3x mb-3"></i><p class="mb-0">' + message + '</p></div>');
+    } else {
+        showAlert('检查结果', '<div class="text-center"><i class="fas fa-exclamation-triangle text-warning fa-3x mb-3"></i><p>还有 <strong>' + incompleteCount + '</strong> 个商品未填写码段：' + message + '</p></div>');
+    }
+}
+
+// 显示提示模态框
+function showAlert(title, content) {
+    document.getElementById('alertModalTitle').textContent = title;
+    document.getElementById('alertModalBody').innerHTML = content;
+    var modal = new bootstrap.Modal(document.getElementById('alertModal'));
+    modal.show();
+}
+
+// 表单验证
+(function() {
+    'use strict';
+    var forms = document.querySelectorAll('.needs-validation');
+    Array.prototype.slice.call(forms).forEach(function(form) {
+        form.addEventListener('submit', function(event) {
+            // 检查所有码段
+            var hasError = false;
+            var errorMessages = [];
+            
+            for (var i = 0; i < totalItems; i++) {
+                var qtyInput = document.querySelectorAll('.received-qty')[i];
+                var expectedQty = parseInt(qtyInput.value) || 0;
+                var productName = document.querySelectorAll('tr[data-item-id]')[i].dataset.productName;
+                
+                if (expectedQty > 0) {
+                    if (!parsedCodes[i] || !parsedCodes[i].valid) {
+                        hasError = true;
+                        errorMessages.push('• ' + productName + '：码段未填写或格式错误');
+                    } else if (parsedCodes[i].count < expectedQty) {
+                        hasError = true;
+                        errorMessages.push('• ' + productName + '：码段数量(' + parsedCodes[i].count + ')少于入库数量(' + expectedQty + ')');
+                    }
+                }
+            }
+            
+            if (hasError) {
+                event.preventDefault();
+                event.stopPropagation();
+                showAlert('入库失败', '<div class="text-center"><i class="fas fa-times-circle text-danger fa-3x mb-3"></i><p>请修正以下问题：</p><div class="text-start">' + errorMessages.join('<br>') + '</div></div>');
+                return;
+            }
+            
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+})();
+
+// 有效期计算
+function calculateValidity() {
+    var productionDate = document.getElementById('production_date').value;
+    var expireDate = document.getElementById('expire_date').value;
+    var preview = document.getElementById('validityPreview');
+
+    if (!productionDate || !expireDate) {
+        preview.textContent = '填写日期后自动计算';
+        preview.className = 'form-control-plaintext text-muted';
+        return;
+    }
+
+    var prod = new Date(productionDate);
+    var exp = new Date(expireDate);
+
+    if (exp <= prod) {
+        preview.textContent = '过期日期必须晚于生产日期';
+        preview.className = 'form-control-plaintext text-danger';
+        return;
+    }
+
+    var diffTime = exp - prod;
+    var totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var daysRemaining = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+
+    var colorClass = 'text-success';
+    var warningIcon = '';
+    var remainingText = '';
+    
+    if (daysRemaining <= 0) {
+        colorClass = 'text-dark';
+        warningIcon = '<i class="fas fa-exclamation-circle me-1"></i>';
+        remainingText = '已过期 ' + Math.abs(daysRemaining) + ' 天';
+    } else if (daysRemaining <= 30) {
+        colorClass = 'text-danger';
+        warningIcon = '<i class="fas fa-exclamation-circle me-1"></i>';
+        remainingText = '仅剩 ' + daysRemaining + ' 天';
+    } else if (daysRemaining <= 90) {
+        colorClass = 'text-warning';
+        warningIcon = '<i class="fas fa-exclamation-triangle me-1"></i>';
+        remainingText = daysRemaining + ' 天后过期';
+    } else if (daysRemaining <= 180) {
+        colorClass = 'text-info';
+        remainingText = daysRemaining + ' 天后过期';
+    } else {
+        remainingText = daysRemaining + ' 天后过期';
+    }
+
+    preview.innerHTML = warningIcon + '有效期：<strong>' + totalDays + '</strong> 天 | 剩余：<strong class="' + colorClass + '">' + remainingText + '</strong>';
+}
+
+document.getElementById('production_date').addEventListener('change', calculateValidity);
+document.getElementById('expire_date').addEventListener('change', calculateValidity);
+
+// 初始化
+document.addEventListener('DOMContentLoaded', function() {
+    updateSummary();
+});
+</script>
+{% endblock %}

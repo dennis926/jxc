@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}{{ '编辑用户' if user else '新增用户' }} - 进销存管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end align-items-center mb-4">
+    <a href="{{ url_for('users.list') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" class="needs-validation" novalidate>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="username" class="form-label">用户名 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="username" name="username"
+                           value="{{ user.username if user else '' }}" required placeholder="请输入用户名"
+                           {% if user %}readonly{% endif %}>
+                    <div class="invalid-feedback">请输入用户名</div>
+                    {% if user %}
+                    <small class="text-muted">用户名创建后不可修改</small>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label for="password" class="form-label">
+                        密码
+                        {% if not user %}<span class="text-danger">*</span>{% endif %}
+                    </label>
+                    <input type="password" class="form-control" id="password" name="password"
+                           placeholder="{{ '请输入密码' if not user else '留空则不修改密码' }}"
+                           {% if not user %}required{% endif %}>
+                    <div class="invalid-feedback">请输入密码</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="real_name" class="form-label">真实姓名</label>
+                    <input type="text" class="form-control" id="real_name" name="real_name"
+                           value="{{ user.real_name if user else '' }}" placeholder="请输入真实姓名">
+                </div>
+                <div class="col-md-6">
+                    <label for="role_id" class="form-label">角色</label>
+                    <select class="form-select" id="role_id" name="role_id">
+                        {% if roles %}
+                            {% for role in roles %}
+                            <option value="{{ role.id }}" {% if user and user.role_id == role.id %}selected{% endif %}>{{ role.name }}</option>
+                            {% endfor %}
+                        {% else %}
+                        <option value="">暂无角色，请先创建角色</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="phone" class="form-label">手机号码</label>
+                    <input type="text" class="form-control" id="phone" name="phone"
+                           value="{{ user.phone if user else '' }}" placeholder="请输入手机号码">
+                </div>
+                <div class="col-md-6">
+                    <label for="email" class="form-label">邮箱地址</label>
+                    <input type="email" class="form-control" id="email" name="email"
+                           value="{{ user.email if user else '' }}" placeholder="请输入邮箱地址">
+                </div>
+                {% if user %}
+                <div class="col-md-6">
+                    <label class="form-label">账号状态</label>
+                    <div class="form-check form-switch mt-1">
+                        <input class="form-check-input" type="checkbox" name="is_active" id="is_active"
+                               value="1" {% if user.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">
+                            {% if user.is_active %}已启用{% else %}已禁用{% endif %}
+                        </label>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>保存
+                </button>
+                <a href="{{ url_for('users.list') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 表单验证
+(function() {
+    'use strict';
+    var forms = document.querySelectorAll('.needs-validation');
+    Array.prototype.slice.call(forms).forEach(function(form) {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+})();
+</script>
+{% endblock %}
