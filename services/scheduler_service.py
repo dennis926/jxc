@@ -88,6 +88,19 @@ class SchedulerService:
         from flask import has_app_context
 
         try:
+            # 去重保护：60秒内若已有同文件名备份记录，说明已执行过，跳过
+            from models.backup_history import BackupHistory
+            from datetime import datetime, timedelta
+
+            now = datetime.now()
+            recent = BackupHistory.query.filter(
+                BackupHistory.created_at >= now - timedelta(seconds=60),
+                BackupHistory.status == 'success'
+            ).first()
+            if recent:
+                print(f"[定时备份] 跳过：{recent.created_at} 已有备份记录 ({recent.filename})")
+                return
+
             if has_app_context():
                 result = BackupService.backup_and_send('auto')
                 print(f"[定时备份] 执行结果: {result}")
