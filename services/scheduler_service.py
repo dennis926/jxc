@@ -80,15 +80,16 @@ class SchedulerService:
     def _run_backup_with_context(cls):
         """在 Flask 应用上下文中执行备份任务
 
-        使用注册时保存的 app 实例，不再调用 create_app()。
-        原实现在任务内部调用 create_app()，而 create_app() 本身又会注册
-        定时任务并启动调度器，形成递归建实例，且每次执行都会新建一份
-        应用与调度器，造成任务重复注册。
+        关键：**所有数据库查询（含去重检查）必须在应用上下文内执行**。
+        原实现把 BackupHistory.query 写在了 app_context 之外，后台线程中
+        必然抛 "Working outside of application context" 并直接跳到 except，
+        导致每日定时备份长期静默失败（备份历史不增长、也发不出备份邮件）。
+        这里把全部作业逻辑收进内部函数 _job()，只在已建立上下文后调用。
         """
         from flask import has_app_context
 
-        try:
-            # 去重保护：60秒内若已有同文件名备份记录，说明已执行过，跳过
+        def _job():
+            # 去重保护：60 秒内若已有成功备份记录，说明属重复触发，跳过
             from models.backup_history import BackupHistory
             from datetime import datetime, timedelta
 
@@ -100,10 +101,12 @@ class SchedulerService:
             if recent:
                 print(f"[定时备份] 跳过：{recent.created_at} 已有备份记录 ({recent.filename})")
                 return
+            result = BackupService.backup_and_send('auto')
+            print(f"[定时备份] 执行结果: {result}")
 
+        try:
             if has_app_context():
-                result = BackupService.backup_and_send('auto')
-                print(f"[定时备份] 执行结果: {result}")
+                _job()
                 return
 
             app = cls._app
@@ -112,8 +115,7 @@ class SchedulerService:
                 return
 
             with app.app_context():
-                result = BackupService.backup_and_send('auto')
-                print(f"[定时备份] 执行结果: {result}")
+                _job()
         except Exception as e:
             print(f"[定时备份] 执行失败: {e}")
             import traceback

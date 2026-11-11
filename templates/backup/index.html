@@ -166,6 +166,7 @@
                             <th>文件名</th>
                             <th>大小</th>
                             <th>修改时间</th>
+                            <th>网盘</th>
                             <th>操作</th>
                         </tr>
                     </thead>
@@ -178,6 +179,16 @@
                             </td>
                             <td>{{ f.size_text }}</td>
                             <td>{{ f.modified }}</td>
+                            <td>
+                                {% set b = baidu_map.get(f.filename) %}
+                                {% if b and b.status == 'uploaded' %}
+                                    <span class="badge bg-success" title="{{ b.path }}"><i class="fas fa-cloud-upload-alt me-1"></i>已上传</span>
+                                {% elif b and b.status == 'failed' %}
+                                    <span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle me-1"></i>上传失败</span>
+                                {% else %}
+                                    <span class="badge bg-light text-muted">未上传</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <a href="{{ url_for('backup.download', filename=f.filename) }}" class="btn btn-sm btn-outline-primary" title="下载">
                                     <i class="fas fa-download"></i> 下载
@@ -192,7 +203,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="text-center text-muted py-4">
+                            <td colspan="5" class="text-center text-muted py-4">
                                 <i class="fas fa-inbox fa-2x mb-3 d-block"></i>
                                 backups 目录下暂无备份文件
                             </td>

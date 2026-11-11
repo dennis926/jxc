@@ -34,6 +34,22 @@ def init_db(app: Flask):
     with app.app_context():
         db.create_all()
 
+        # SQLite 的 create_all() 不会给既有表补列；为网盘备份功能做幂等迁移。
+        # 仅新增可空字段，不改写或删除任何既有备份记录。
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        if 'backup_history' in inspector.get_table_names():
+            columns = {column['name'] for column in inspector.get_columns('backup_history')}
+            with db.engine.begin() as connection:
+                if 'baidu_path' not in columns:
+                    connection.execute(text(
+                        'ALTER TABLE backup_history ADD COLUMN baidu_path VARCHAR(300)'
+                    ))
+                if 'baidu_status' not in columns:
+                    connection.execute(text(
+                        'ALTER TABLE backup_history ADD COLUMN baidu_status VARCHAR(20)'
+                    ))
+
         # 初始化默认管理员账号
         admin_user = User.query.filter_by(username='admin').first()
         if not admin_user:

@@ -1,4 +1,5 @@
 import os
+import time
 import shutil
 import zipfile
 import smtplib
@@ -535,6 +536,42 @@ class BackupService:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
+    # 本机备份保留天数：本机磁盘只留最近若干天，长期归档由百度网盘承担
+    # （可用环境变量 JXC_BACKUP_KEEP_DAYS 覆盖，便于按机器调整）
+    LOCAL_KEEP_DAYS = int(os.environ.get('JXC_BACKUP_KEEP_DAYS', '3'))
+
+    @staticmethod
+    def cleanup_local_backups(keep_days=None):
+        """删除本机超过保留天数的备份文件，避免本地磁盘被历史备份占满
+
+        安全措施：无论多旧，始终保留最新一份，避免连续多日无备份时被清空。
+        """
+        days = BackupService.LOCAL_KEEP_DAYS if keep_days is None else int(keep_days)
+        backup_dir = _Paths.backups_dir()
+        cutoff = time.time() - days * 86400
+
+        files = [
+            os.path.join(backup_dir, name)
+            for name in os.listdir(backup_dir)
+            if name.startswith('inventory_backup_') and name.endswith('.zip')
+        ]
+        if not files:
+            return []
+        files.sort(key=lambda f: os.path.getmtime(f))
+
+        removed = []
+        for path in files[:-1]:  # 最后一项（最新）永不删除
+            if os.path.getmtime(path) >= cutoff:
+                continue
+            try:
+                os.remove(path)
+                removed.append(os.path.basename(path))
+            except OSError as exc:
+                print(f'[Backup] 清理本机旧备份失败 {os.path.basename(path)}: {exc}')
+        if removed:
+            print(f'[Backup] 已清理本机旧备份 {len(removed)} 份（本机保留最近 {days} 天）')
+        return removed
+
     @staticmethod
     def backup_and_send(backup_type='manual', template_id=None, trigger_type=None):
         """备份并发送邮件"""
@@ -555,6 +592,16 @@ class BackupService:
             )
             db.session.add(history)
             db.session.commit()
+            # 发送 QQ 告警附带失败原因
+            try:
+                import subprocess
+                subprocess.run(
+                    ['/usr/bin/python3', '/root/.hermes/scripts/qq_notify.py',
+                     f'⚠️ 进销存备份失败\n🕐 时间：{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n📋 原因：{result["error"]}'],
+                    timeout=10, check=False
+                )
+            except Exception:
+                pass
             return result
 
         # 发送邮件
@@ -566,6 +613,26 @@ class BackupService:
             backup_type=backup_type
         )
 
+        # 上传百度网盘（失败不影响备份与邮件，仅记录状态，便于事后追溯）
+        baidu_ok, baidu_info = False, None
+        try:
+            from services.baidu_backup import upload_backup
+            baidu_ok, baidu_info = upload_backup(result['filepath'])
+        except Exception as exc:  # noqa: BLE001
+            baidu_ok, baidu_info = False, f'网盘上传异常：{exc}'
+        if not baidu_ok:
+            print(f"[备份] 百度网盘上传未成功：{baidu_info}")
+
+        # 仅在网盘上传成功后清理旧本机备份，避免远端不可用时仍删除本地副本。
+        # 始终保留最新一份的保护由 cleanup_local_backups() 实现。
+        if baidu_ok:
+            try:
+                BackupService.cleanup_local_backups()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[备份] 清理本机旧备份异常：{exc}")
+        else:
+            print("[备份] 网盘未确认上传成功，保留本机历史备份")
+
         # 记录历史
         history = BackupHistory(
             filename=result['filename'],
@@ -574,17 +641,34 @@ class BackupService:
             status='success',
             sent_to_email=email_result['success'],
             email_status='sent' if email_result['success'] else 'failed',
-            error_message=email_result.get('error') if not email_result['success'] else None
+            error_message=email_result.get('error') if not email_result['success'] else None,
+            baidu_path=baidu_info if baidu_ok else None,
+            baidu_status='uploaded' if baidu_ok else 'failed'
         )
         db.session.add(history)
         db.session.commit()
+
+        # 邮件发送失败时发送 QQ 告警
+        if not email_result['success']:
+            try:
+                import subprocess
+                subprocess.run(
+                    ['/usr/bin/python3', '/root/.hermes/scripts/qq_notify.py',
+                     f'⚠️ 进销存备份邮件发送失败\n🕐 时间：{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n📋 原因：{email_result.get("error", "未知")}'],
+                    timeout=10, check=False
+                )
+            except Exception:
+                pass
 
         return {
             'success': True,
             'filename': result['filename'],
             'email_sent': email_result['success'],
             'email_error': email_result.get('error'),
-            'template_name': email_result.get('template_name')
+            'template_name': email_result.get('template_name'),
+            'baidu_uploaded': baidu_ok,
+            'baidu_path': baidu_info if baidu_ok else None,
+            'baidu_error': None if baidu_ok else baidu_info
         }
 
     @staticmethod

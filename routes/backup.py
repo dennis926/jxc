@@ -36,13 +36,21 @@ def index():
     jobs = SchedulerService.get_jobs()
     has_job = any(job.id == 'daily_backup' for job in jobs)
     backup_files = BackupService.list_backup_files()
-    return render_template('backup/index.html', 
+    # 网盘上传状态（按文件名映射），供"服务器上的备份文件"列表逐行显示
+    baidu_map = {}
+    for record in BackupHistory.query.filter(BackupHistory.baidu_status.isnot(None)).all():
+        baidu_map[record.filename] = {
+            'status': record.baidu_status,
+            'path': record.baidu_path,
+        }
+    return render_template('backup/index.html',
                          email_config=email_config,
                          history=history,
                          history_limit=HISTORY_LIMIT,
                          history_total=history_total,
                          backup_stats=backup_stats,
                          has_job=has_job,
+                         baidu_map=baidu_map,
                          backup_files=backup_files)
 
 @backup_bp.route('/config', methods=['GET', 'POST'])

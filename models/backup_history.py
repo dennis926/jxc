@@ -11,4 +11,6 @@ class BackupHistory(db.Model):
     error_message = db.Column(db.Text)
     sent_to_email = db.Column(db.Boolean, default=False)
     email_status = db.Column(db.String(20))  # sent/failed
+    baidu_path = db.Column(db.String(300))   # 百度网盘远端完整路径
+    baidu_status = db.Column(db.String(20))  # uploaded/failed/skipped
     created_at = db.Column(db.DateTime, default=datetime.now)
